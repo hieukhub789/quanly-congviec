@@ -1520,6 +1520,8 @@ function exportToJson() {
 
   link.download = fileName;
   link.click();
+  document.getElementById("exportModal").style.display = "none";
+
 }
 
 
@@ -1587,7 +1589,8 @@ function handleJsonImport(event) {
       });
 
      localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(merged));
-  showToast(`✅ Đã nhập dữ liệu cho ${currentUser === "nhi" ? "Ms Nhi" : "Mr Quan"} (${data.length} dòng, ${merged.length - currentTasks.length} mới)`);
+ showToast(`✅ Đã nhập dữ liệu cho ${currentUser} (${data.length} dòng, ${merged.length - currentTasks.length} mới)`);
+document.getElementById("exportModal").style.display = "none";
 
   // Đồng bộ lại sau khi localStorage ghi xong
   setTimeout(() => {
