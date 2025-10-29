@@ -1,0 +1,2673 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Quản lý công việc</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #74ebd5, #acb6e5);
+    }
+    input, textarea {
+      margin: 5px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    input[type="text"] {
+      width: 200px;
+    }
+    button {
+      padding: 10px 18px;
+      margin: 5px;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    #addBtn { background-color: #007bff; }
+    #addBtn:hover { background-color: #0056b3; }
+
+    #exportBtn { background-color: #28a745; }
+    #exportBtn:hover { background-color: #1e7e34; }
+
+    #clearBtn { background-color: #e74c3c; }
+    #clearBtn:hover { background-color: #c0392b; }
+
+    table {
+      margin-top: 20px;
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.4);
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: 5% auto;
+      padding: 20px;
+      border-radius: 12px;
+      width: 500px;
+      max-height: none;
+      overflow-y: visible;
+    }
+    #modalNote {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      
+    }
+    .close {
+      float: right;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .modal-buttons button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+    }
+    .edit-btn { background-color: #ffc107; }
+    .delete-btn { background-color: #dc3545; }
+    /* Tùy chỉnh chiều rộng cột trong bảng xuất */
+  .export-table {
+    table-layout: fixed;
+  }
+
+  .export-table th:nth-child(1),
+  .export-table td:nth-child(1) {
+       width: 6%;   /* STT */
+  }
+
+  .export-table th:nth-child(2),
+  .export-table td:nth-child(2) {
+       width: 22%;  /* Công việc */
+  }
+
+  .export-table th:nth-child(3),
+  .export-table td:nth-child(3) {
+    width: 44%;  /* Ghi chú - dài gấp đôi */
+  }
+
+  .export-table th:nth-child(4),
+  .export-table td:nth-child(4) {
+    width: 22%;  /* Trạng thái */
+  }
+
+  .export-table th:nth-child(5),
+  .export-table td:nth-child(5) {
+    width: 22%;  /* Ngày nhập */
+  }
+
+    .hide-when-capture {
+      display: inline-block;
+    }
+    @media (max-width: 600px) {
+      input, textarea {
+        width: 100%;
+      }
+      .modal-content {
+        width: 95%;
+      }
+      #addBtn, #exportBtn, #clearBtn {
+        width: 48%;
+        font-size: 14px;
+      }
+      th, td {
+        font-size: 14px;
+        padding: 8px;
+      }
+    }
+    @media (min-width: 768px) {
+      .modal-content { width: 600px; }
+    }
+
+    .input-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .search-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+    #searchInput {
+      padding: 10px 15px;
+      border: 2px solid #9b59b6;
+      border-radius: 10px;
+      width: 300px;
+      font-size: 15px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    #searchInput:focus {
+      border-color: #8e44ad;
+      box-shadow: 0 0 8px rgba(142, 68, 173, 0.5);
+    }
+
+    #toast {
+      visibility: hidden;
+      min-width: 250px;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 8px;
+      padding: 16px;
+      position: fixed;
+      z-index: 1000;
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      font-size: 16px;
+      transition: visibility 0s, opacity 0.5s ease;
+      opacity: 0;
+    }
+    #taskTable tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+#taskTable tbody tr:hover {
+  background-color: #ced413;
+}
+#taskTable th:first-child,
+#taskTable td:first-child {
+  text-align: center;
+  vertical-align: middle;
+  width: 50px;
+  max-width: 50px;
+}
+.export-table {
+  table-layout: fixed;
+}
+
+.export-table th:first-child,
+.export-table td:first-child {
+  text-align: center;
+  vertical-align: middle;
+  width: 50px;
+  max-width: 50px;
+}
+/* xóa */
+.cancel-btn {
+    background-color: #0090f0;
+    border: none;
+    color: black;
+    padding: 8px 16px;
+    margin: 4px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .cancel-btn:hover {
+    background-color: #080707;
+  }
+
+  .delete-btn {
+    background-color: #dc3545;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    margin: 4px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .delete-btn:hover {
+    background-color: #c82333;
+  }
+  #modalTask, #modalNote {
+    background-color: #e0e0e0; /* nền xám mặc định */
+    padding: 8px;
+    border-radius: 4px;
+  }
+  #taskTable th:nth-child(4),
+#taskTable td:nth-child(4) {
+  width: 120px;
+  text-align: center;
+}
+
+.status-label {
+  font-weight: bolder;
+  color: #333;
+  font-size: 14px;
+  margin-bottom: 6px;
+  display: inline-block;
+  font-family: 'Segoe UI', sans-serif;
+  margin-top: 20px;
+}
+
+#modalStatus {
+  width: 160px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1.8px solid #4a90e2;
+  border-radius: 6px;
+  background-color: #f9faff;
+  color: #222;
+  outline: none;
+  cursor: not-allowed; /* Do disabled select show not-allowed cursor */
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#modalStatus:disabled {
+  background-color: #e6e9f0;
+  color: #888;
+  border-color: #aab3cc;
+}
+
+#modalStatus:not(:disabled):focus {
+  border-color: #357ae8;
+  box-shadow: 0 0 5px rgba(53, 122, 232, 0.5);
+}
+
+#taskTable th:nth-child(5),
+#taskTable td:nth-child(5) {
+  width: 110px;
+  text-align: center;
+}
+
+/* thêm */
+
+
+.filter-container {
+    margin-bottom: 5px;
+    font-family: Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-container label {
+    font-weight: 600;
+    color: #333;
+  }
+
+  .filter-container select {
+    padding: 10px 15px;
+    margin-left: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s ease-in-out;
+    border: 2px solid #9b59b6;
+    border-radius: 10px;
+  }
+
+  .filter-container select:hover,
+  .filter-container select:focus {
+    border-color: #007BFF;
+    outline: none;
+  } 
+  button:disabled {
+  background-color: #ccc;   /* Màu nền xám */
+  color: #666;              /* Màu chữ nhạt */
+  cursor: not-allowed;      /* Con trỏ bị chặn */
+  opacity: 0.7;             /* Mờ nhẹ */
+}
+
+/* thông báo mượt */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+.toast {
+  background-color: #2e7d32;
+  color: #fff;
+  padding: 15px 20px;
+  margin-top: 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  min-width: 260px;
+  opacity: 0;
+  transform: translateX(100%);
+  animation: slideIn 0.4s forwards, fadeOut 0.4s forwards 5s;
+}
+
+@keyframes slideIn {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+  #repairPagination button {
+    margin: 2px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: #080707;
+    cursor: pointer;
+  }
+
+  #repairPagination button:hover:not(:disabled) {
+    background-color: #bbb;
+  }
+
+  #repairPagination button:disabled {
+    background-color: #080707;
+    cursor: not-allowed;
+    color: #888;
+  }
+
+  #repairPagination button.active-page {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+  }
+
+  .ModalRepair {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  }
+  .modal-repair-wrapper {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;   /* căn giữa theo chiều dọc */
+    justify-content: center; /* căn giữa theo chiều ngang */
+    z-index: 10000;
+  }
+
+  .modal-repair-wrapper.hidden {
+    display: none;
+  }
+
+  .modal-repair-box {
+    background: #ffffff;
+    padding: 24px 20px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    animation: fadeSlideIn 0.2s ease-out;
+    margin-left: 450px;
+    margin-top: 70px;
+    /* justify-content: center;
+    text-align: center; */
+  }
+
+  .modal-repair-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 18px;
+    text-align: center;
+    color: #333;
+  }
+
+  .modal-repair-input {
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-sizing: border-box;
+  }
+
+  .modal-repair-input:focus {
+    border-color: #007bff;
+    outline: none;
+  }
+
+  .modal-repair-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .modal-repair-btn {
+    flex: 1;
+    padding: 10px;
+    font-size: 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .modal-repair-btn.save {
+    background-color: #28a745;
+    color: white;
+  }
+
+  .modal-repair-btn.save:hover {
+    background-color: #218838;
+  }
+
+  .modal-repair-btn.cancel {
+    background-color: #dc3545;
+    color: white;
+  }
+
+  .modal-repair-btn.cancel:hover {
+    background-color: #c82333;
+  }
+
+  @keyframes fadeSlideIn {
+    from {
+      transform: translateY(-20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+#btnSuaGhiChu:hover {
+  background-color: #0056b3 !important;
+}
+
+#modalGhiChu button:hover {
+  opacity: 0.9;
+}
+
+
+/* Modal nền */
+.modal-ghichu {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* Hộp modal chính */
+.modal-ghichu-content {
+  background: white;
+  padding: 24px;
+  width: 90%;
+  max-width: 900px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  animation: fadeIn 0.3s ease;
+}
+
+/* Tiêu đề modal */
+.modal-ghichu-content h2 {
+  margin-top: 0;
+  font-size: 20px;
+  color: #333;
+}
+.ghichu-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+/* Vùng nhập ghi chú */
+.ghichu-textarea {
+  width: 100%;
+  height: 300px;
+  padding: 20px 0px;
+  padding-left: 10px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  resize: none;
+  background-color: #f9f9f9;
+  color: #000;
+  outline: none;
+  margin: 10px;
+}
+
+/* Vùng chứa nút */
+.ghichu-buttons {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Nút sửa */
+.btn-sua {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btn-sua:hover {
+  background-color: #0056b3;
+}
+
+/* Nút đóng */
+.btn-dong {
+  background-color: red;
+  color: #000;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btn-dong:hover {
+  background-color: #ccc;
+}
+
+/* Hiệu ứng fade */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</head>
+<body>
+  <h2 style="text-align: center; color: #2c3e50;">Ứng dụng Quản lý Công việc Cá nhân và Nhóm</h2>
+  <div class="toast-container" id="toastContainer"></div>
+  <!-- Ghi chú nhanh -->
+
+
+  <!-- --- USER SWITCH: start --- -->
+  <div class="filter-container" style="margin-bottom: 12px; text-align:center;">
+    <label for="userSelect" style="font-weight:bold; margin-right:8px;">Người dùng:</label>
+    <select id="userSelect" onchange="changeUser()" style="padding:8px 12px; border-radius:8px; border:2px solid #9b59b6;">
+      <option value="nhi">Ms Nhi</option>
+      <option value="quan">Mr Quan</option>
+      <option value="all">Tất cả</option>
+    </select>
+  </div>
+  <!-- --- USER SWITCH: end --- -->
+
+  <div class="search-wrapper">
+    <input type="text" id="searchInput" placeholder="Tìm kiếm công việc hoặc ghi chú..." oninput="filterTasks()" style="width: 410px;">
+    
+    <div class="filter-container">
+  <!-- <label for="statusFilter">Lọc theo trạng thái:</label> -->
+  <select id="statusFilter">
+    <option value="">Tất cả trạng thái </option>
+    <option value="Chưa làm">Chưa làm</option>
+    <option value="Đang làm">Đang làm</option>
+    <option value="Hoàn thành">Hoàn thành</option>
+  </select>
+  
+
+  
+  </div>
+<!-- loc ngày -->
+  <label for="startDate" style="margin-top: 10px; margin-left: 10px;font-size: larger;">Từ ngày:</label>
+<input type="text" style="width: 110px; padding: 5px; border: 2px solid #9b59b6; border-radius: 10px;"  id="startDate" placeholder="dd/mm/yyyy">
+
+<label for="endDate" style="margin-top: 10px;margin-left: 10px; font-size: larger;">Đến ngày:</label>
+<input type="text" id="endDate" style="width: 110px; padding: 5px; border: 2px solid #9b59b6; border-radius: 10px;"  placeholder="dd/mm/yyyy">
+
+<button id="clearDateFilter"  type="button" style="background-color: red;">Xóa lọc ngày</button>
+
+  
+  </div>
+  <div class="input-wrapper">
+    <input type="text" id="taskInput" placeholder="Nhập công việc">
+    <input type="text" id="noteInput" placeholder="Ghi chú">
+    <button id="addBtn" onclick="addTask()">Thêm</button>
+    <button id="exportBtn" onclick="showExportModal()">Xuất</button>
+    <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
+    <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
+    <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
+    <button onclick="showRepairModal()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
+    <button onclick="window.open('grab_be.html', '_blank')" style="background-color: #FFD700; color: rgb(11, 11, 11);">
+  Grab/Be
+</button>
+<button onclick="moModalGhiChu()" style="background-color: #c53f92; color: white; "> Ghi Chú</button>
+
+  <table id="taskTable">
+    <thead>
+      <tr>
+        <th>STT</th>
+        <th>Công việc</th>
+        <th>Ghi chú</th>
+        <th>Trạng thái</th> <!-- mới -->
+        <th>Ngày nhập</th> <!-- thêm dòng này -->
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- phân trang -->
+   <div id="paginationControls" style="margin-top: 10px; text-align: center;">
+  <button id="prevPageBtn" style="color: #080707;" >⬅️ Trước</button>
+  <span id="paginationInfo" >Trang 1</span>
+  <button id="nextPageBtn" style="color: #080707;">Sau ➡️</button>
+</div>
+
+
+  <!-- Modal chi tiết -->
+  <div id="detailModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('detailModal')">&times;</span>
+    <h3>Chi tiết công việc</h3>
+    <p><strong>STT:</strong> <span id="modalStt"></span></p>
+    <p><strong>Công việc:</strong></p>
+    <div id="modalTask" contenteditable="false" style="background-color: #e0e0e0; border-radius: 6px; padding: 6px;"></div>
+    <p><strong>Ghi chú:</strong></p>
+    <div id="modalNote" contenteditable="false" style="background-color: #e0e0e0; border-radius: 6px; padding: 6px;"></div>
+   <label for="modalStatus" class="status-label">Trạng thái:</label><br>
+    <select id="modalStatus" disabled>
+    <option value="Chưa làm">Chưa làm</option>
+    <option value="Đang làm">Đang làm</option>
+    <option value="Hoàn thành">Hoàn thành</option>
+    </select>
+    <div class="form-group" style="margin-top: 10px;">
+  <label for="modalDate" style="display: block; font-weight: bold; font-size: 14px;">Ngày nhập:</label>
+  <input type="text" id="modalDate" class="form-control" 
+         style="background-color:#e0e0e0; width: 140px;" readonly />
+</div>
+    
+    <div class="modal-buttons">
+      <button class="edit-btn" onclick="toggleEditTask()" id="editSaveBtn">Sửa</button>
+      <button class="delete-btn" onclick="openDeleteConfirmation()">Xóa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal thêm người dùng mới -->
+<div id="addUserModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width:350px; text-align:center;">
+    <span class="close" onclick="closeModal('addUserModal')" style="float:right;">&times;</span>
+    <h3>👤 Thêm người dùng mới</h3>
+    <input type="text" id="newUserName" placeholder="Nhập tên người dùng..." 
+           style="width:90%; padding:8px; border-radius:8px; border:1px solid #ccc;">
+    <div class="modal-buttons" style="justify-content:center;">
+      <button class="edit-btn" onclick="addNewUser()">Thêm</button>
+      <button class="delete-btn" onclick="deleteCurrentUser()">Xóa người dùng hiện tại</button>
+    </div>
+  </div>
+</div>
+
+
+  <!-- Modal xuất -->
+  <div id="exportModal" class="modal">
+    <div class="modal-content" id="exportContent">
+      <span class="close hide-when-capture" onclick="closeModal('exportModal')">&times;</span>
+      <h3 id="exportTitle">DANH SÁCH CÔNG VIỆC</h3>
+      <button class="hide-when-capture" onclick="captureExportImage()" style="margin-top: 10px; padding: 6px 12px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer;">Chụp ảnh</button>
+      <button class="hide-when-capture" onclick="exportToJson()" style="margin-top: 10px; padding: 6px 12px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer;">Xuất dữ liệu ra JSON</button>
+     <input type="file" id="importJsonInput" accept=".json" style="display: none;" onchange="handleJsonImport(event)">
+<button class="hide-when-capture" onclick="document.getElementById('importJsonInput').click()" style="margin-top: 10px; padding: 6px 12px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">
+  Nhập từ file JSON
+</button>
+        <table class="export-table">
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Công việc</th>
+              <th>Ghi chú</th>
+              <th>Trạng thái</th>
+              <th>Ngày nhập</th>
+            </tr>
+          </thead>
+          <tbody id="exportBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <!-- Modal xác nhận xoá -->
+<div id="confirmDeleteModal" class="modal">
+  <div class="modal-content">
+    <h3>Xác nhận xoá</h3>
+    <p>Bạn có chắc muốn xoá công việc này không?</p>
+    <div class="modal-buttons">
+      <button class="delete-btn" onclick="confirmDelete()">Xác nhận</button>
+      <button class="cancel-btn" onclick="closeModal('confirmDeleteModal')">Hủy</button>
+    </div>
+  </div>
+</div>
+
+  <!-- Modal xác nhận xóa tất cả -->
+  <div id="confirmClearModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('confirmClearModal')">&times;</span>
+      <h3>Xác nhận</h3>
+      <p>Bạn có muốn xóa toàn bộ công việc không?</p>
+      <div class="modal-buttons">
+        <button class="delete-btn" onclick="clearAllTasks()">Xóa tất cả</button>
+        <button class="edit-btn" onclick="closeModal('confirmClearModal')">Hủy</button>
+      </div>
+    </div>
+  </div>
+  <!-- tông số công việc -->
+  <div id="footerInfo" style="display: flex; justify-content: space-between; margin-top: 20px;">
+  <div id="taskCount" style="font-weight: bold;"></div>
+  <div id="updateDate" style="margin: 4px 0; font-weight: bold; text-align: center;">Ngày cập nhật: --/--/----</div>
+  <div id="completedCount" style="font-weight: bold;"></div>
+</div>
+
+<div id="weatherModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999;">
+  <div style="background:#fff; width:90%; max-width:400px; margin:100px auto; padding:20px; border-radius:10px; position:relative;">
+    <button onclick="closeWeatherModal()" style="position:absolute; top:10px; right:10px;">❌</button>
+    <h3>Thời tiết hiện tại</h3>
+    <div id="weatherContent">Đang tải...</div>
+  </div>
+</div>
+<!-- Modal Sửa xe -->
+<div id="repairModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+  <div style="background: white; width: 90%; max-width: 800px; margin: 80px auto; padding: 20px; border-radius: 10px; position: relative;">
+    <h3>Nhập thông tin sửa xe</h3>
+    <!-- Ô tìm kiếm -->
+<input type="text" id="repairSearchInput" placeholder="Tìm kiếm..." oninput="renderRepairTable()" 
+  style=" padding: 8px 10px; width: 300px; border-radius: 10px; border: 2px solid #9b59b6;">
+  <button id="clearAllRepairsBtn" style="margin-top: 10px; background-color: red; color: white; padding: 6px 12px; border-radius: 6px;">
+  🗑️ Xoá tất cả
+</button>
+<input type="file" id="importRepairInput" accept=".json" style="display: none;" onchange="handleRepairJsonImport(event)">
+
+<button class="hide-when-capture" onclick="document.getElementById('importRepairInput').click()" style="margin-top: 10px; padding: 6px 12px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">
+  Nhập từ file JSON
+</button>
+
+
+
+    <!-- Dãy input -->
+    <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+      <input type="text" id="phutungInput" placeholder="Phụ tùng" style="flex: 1; min-width: 120px; padding: 8px 10px;border: 2px solid #9b59b6;">
+      <input type="text" id="diadiemInput" placeholder="Địa điểm" style="flex: 1; min-width: 120px; padding: 8px 10px;border: 2px solid #9b59b6;">
+      <input type="text" id="thoigianInput" placeholder="dd/mm/yyyy" style="flex: 1; min-width: 120px; padding: 8px 10px;border: 2px solid #9b59b6;">
+      <input type="text" id="chiphiInput" placeholder="Chi phí (đồng)" style="flex: 1; min-width: 120px; padding: 8px 10px;border: 2px solid #9b59b6;">
+      <button onclick="addRepairRow()" style="background-color: #2ecc71; color: white; padding: 6px 12px; border: 2px solid; border-radius: 10px;">Nhập</button>
+    </div>
+
+    <!-- Bảng hiển thị -->
+    <table border="1" width="100%" style="border-collapse: collapse; text-align: center;">
+      <thead style="background-color: #eee;">
+        <tr>
+          <th style="width: 50px;">STT</th>
+          <th>Phụ tùng</th>
+          <th>Địa điểm</th>
+          <th>Thời gian</th>
+          <th>Chi phí</th>
+        </tr>
+      </thead>
+      <tbody id="repairTableBody">
+        <!-- Dữ liệu sẽ thêm vào đây -->
+      </tbody>
+    </table>
+    <div id="repairPagination" style="margin-top: 10px; text-align: center;"></div>
+
+     <p id="totalCost" style="margin-top: 10px; font-weight: bold;">Tổng chi phí: 0 VND</p>
+
+    <br />
+    <button onclick="closeRepairModal()" style="background-color: #e74c3c; color: white; padding: 8px 16px; border: none; border-radius: 5px;">Đóng</button>
+  </div>
+  <!-- luu lai -->
+  <div id="confirmModal" class="ModalRepair" style="display:none;">
+  <div class="modal-content" style="padding: 20px; border-radius: 8px; background-color: #fff;">
+    <p id="confirmMessage"></p>
+    <div style="text-align: right; margin-top: 20px;">
+      <button id="confirmYes" style="background-color: red; color: white; padding: 6px 12px; border-radius: 6px;">Xoá</button>
+      <button id="confirmNo" style="margin-left: 10px; padding: 6px 12px; border-radius: 6px; background-color: #0056b3;">Huỷ</button>
+    </div>
+  </div>
+</div>
+</div>
+
+
+<div id="editRepairModal" class="modal-repair-wrapper hidden">
+  <div class="modal-repair-box">
+    <h2 class="modal-repair-title">🛠️ Sửa thông tin sửa chữa</h2>
+
+    <input id="editPhutungInput" class="modal-repair-input" placeholder="Phụ tùng đã thay">
+    <input id="editDiadiemInput" class="modal-repair-input" placeholder="Địa điểm sửa chữa">
+    <input id="editThoigianInput" class="modal-repair-input" placeholder="Ngày sửa (dd/mm/yyyy)">
+    <input id="editChiphiInput" class="modal-repair-input" placeholder="Chi phí (đồng)">
+
+    <div class="modal-repair-actions">
+      <button onclick="saveEditedRepair()" class="modal-repair-btn save">💾 Lưu</button>
+      <button onclick="closeEditRepairModal()" class="modal-repair-btn cancel">❌ Hủy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ghi chú -->
+ <!-- Modal Ghi Chú Đẹp -->
+<div id="modalGhiChu" class="modal-ghichu">
+  <div class="modal-ghichu-content">
+    <h2>📝 Ghi Chú</h2>
+    <textarea id="noiDungGhiChu" readonly class="ghichu-textarea"></textarea>
+    <div class="ghichu-footer">
+    <div id="thoiGianLuu" style="font-size: 13px; color: #666; margin-top: 6px;">
+      🕒 Chưa có lần lưu nào
+    </div>
+    <div class="ghichu-buttons">
+      <button id="btnSuaGhiChu" onclick="batCheDoSuaGhiChu()" class="btn-sua">✏️ Sửa</button>
+      <button onclick="dongModalGhiChu()" class="btn-dong">Đóng</button>
+    </div>
+    </div>
+  </div>
+</div>
+  <!-- Toast -->
+  <div id="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+    let currentDetailIndex = -1;
+    let isStorageFull = false;
+    let isEditing = false;
+
+    let currentPage = 1;
+    const tasksPerPage = 10;
+
+    function saveToLocalStorage() {
+  try {
+    // Không lưu khi đang ở chế độ "Tất cả"
+    if (currentUser === "all") {
+      console.warn("Đang ở chế độ 'Tất cả' — không lưu dữ liệu.");
+      return;
+    }
+
+    // Lưu riêng từng người dùng
+    localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(tasks));
+
+    enableAddButton(); // bật lại nút nếu lưu thành công
+  } catch (e) {
+    if (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED") {
+      showToast("Bộ nhớ đã đầy! Không thể lưu thêm công việc.");
+      disableAddButton(); // vô hiệu hóa nút thêm
+    } else {
+      console.error("Lỗi lưu localStorage:", e);
+    }
+  }
+}
+
+// vô hiệu quá nút thêm
+function disableAddButton() {
+  const btn = document.getElementById("addBtn");
+  if (btn) btn.disabled = true;
+}
+
+function enableAddButton() {
+  const btn = document.getElementById("addBtn");
+  if (btn) btn.disabled = false;
+}
+
+//thêm tính năng danh sách xuất
+    function renderTable() {
+      filterTasks();
+      
+    }
+function filterTasks() {
+  const keywordInput = document.getElementById("searchInput").value.toLowerCase();
+  const selectedStatus = document.getElementById("statusFilter").value;
+  const tableBody = document.querySelector("#taskTable tbody");
+  const startDateStr = document.getElementById("startDate").value;
+  const endDateStr = document.getElementById("endDate").value;
+
+  tableBody.innerHTML = "";
+
+  const statusPriority = {
+    "Đang làm": 1,
+    "Chưa làm": 2,
+    "Hoàn thành": 3
+  };
+
+  function parseDDMMYYYY(dateStr) {
+    const parts = dateStr.split("/");
+    const day = parts[0].padStart(2, "0");
+    const month = parts[1].padStart(2, "0");
+    const year = parts[2];
+    return new Date(`${year}-${month}-${day}`);
+  }
+
+  const startDate = startDateStr ? parseDDMMYYYY(startDateStr) : null;
+  const endDate = endDateStr ? parseDDMMYYYY(endDateStr) : null;
+
+  // 🧠 Tách từ khóa (theo dấu phẩy hoặc khoảng trắng)
+  const keywords = keywordInput
+    .split(/[,\s]+/) // tách theo dấu phẩy hoặc khoảng trắng
+    .filter(k => k.length > 0);
+
+  // 🧠 Xác định kiểu tìm kiếm tự động:
+  // - Có dấu phẩy => OR (ít nhất 1 từ)
+  // - Không có dấu phẩy => AND (phải chứa tất cả từ)
+  const isAndSearch = !keywordInput.includes(",");
+
+  const filteredTasks = tasks.filter(taskObj => {
+    const text = `${(taskObj.task || "").toLowerCase()} ${(taskObj.note || "").toLowerCase()}`;
+
+    const taskMatch = keywords.length === 0
+      ? true
+      : isAndSearch
+        ? keywords.every(word => text.includes(word))   // AND: tất cả từ khóa phải có
+        : keywords.some(word => text.includes(word));   // OR: ít nhất 1 từ khóa
+
+    const statusMatch =
+      selectedStatus === "" ||
+      (taskObj.status || "").trim().toLowerCase() === selectedStatus.toLowerCase();
+
+    const taskDateStr = taskObj.date || "";
+    let dateMatch = true;
+
+    if ((startDate || endDate) && taskDateStr.includes("/")) {
+      const taskDate = parseDDMMYYYY(taskDateStr);
+      if (startDate && taskDate < startDate) dateMatch = false;
+      if (endDate && taskDate > endDate) dateMatch = false;
+    }
+
+    return taskMatch && statusMatch && dateMatch;
+  });
+
+  //  Sắp xếp: ghim trước > trạng thái > ngày
+  filteredTasks.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+
+    const statusA = (a.status || "").trim();
+    const statusB = (b.status || "").trim();
+    const priorityA = statusPriority[statusA] || 99;
+    const priorityB = statusPriority[statusB] || 99;
+
+    if (priorityA !== priorityB) return priorityA - priorityB;
+
+    const dateA = a.date ? parseDDMMYYYY(a.date) : new Date(0);
+    const dateB = b.date ? parseDDMMYYYY(b.date) : new Date(0);
+    return dateB - dateA;
+  });
+
+  // 🧾 PHÂN TRANG
+  const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
+  if (currentPage > totalPages) currentPage = totalPages || 1;
+
+  const startIndex = (currentPage - 1) * tasksPerPage;
+  const paginatedTasks = filteredTasks.slice(startIndex, startIndex + tasksPerPage);
+
+  paginatedTasks.forEach((taskObj, idx) => {
+    const row = document.createElement("tr");
+
+    let color = "";
+    switch ((taskObj.status || "").trim().toLowerCase()) {
+      case "hoàn thành": color = "green"; break;
+      case "chưa làm": color = "red"; break;
+      case "đang làm": color = "#000000"; break;
+      default: color = "black";
+    }
+
+    row.innerHTML = `
+      <td>${startIndex + idx + 1}</td>
+      <td>${taskObj.pinned ? "📌 " : ""}${taskObj.task}</td>
+      <td>${taskObj.note}</td>
+      <td style="color: ${color}; font-weight: bold;">${taskObj.status || ""}</td>
+      <td>${taskObj.date || ""}</td>
+    `;
+
+    row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
+      e.preventDefault();
+      togglePin(tasks.indexOf(taskObj));
+    };
+
+    row.onclick = (e) => {
+      if (e.target.tagName.toLowerCase() === "button") return;
+      showDetails(tasks.indexOf(taskObj));
+    };
+
+    tableBody.appendChild(row);
+  });
+
+  // 🔢 Cập nhật phân trang
+  document.getElementById("paginationInfo").textContent =
+    `Trang ${currentPage} / ${totalPages || 1}`;
+
+  document.getElementById("prevPageBtn").disabled = currentPage === 1;
+  document.getElementById("nextPageBtn").disabled = currentPage === totalPages || totalPages === 0;
+
+  // 📅 Cập nhật thông tin thống kê
+  document.getElementById("taskCount").textContent = `Tổng công việc: ${filteredTasks.length}`;
+  const completedCount = filteredTasks.filter(task => (task.status || "").toLowerCase().trim() === "hoàn thành").length;
+  document.getElementById("completedCount").textContent = `Hoàn thành: ${completedCount}`;
+  const today = new Date();
+  const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth()+1).padStart(2, '0')}/${today.getFullYear()}`;
+  document.getElementById("updateDate").textContent = `Ngày cập nhật: ${formattedDate}`;
+}
+
+function togglePin(index) {
+  tasks[index].pinned = !tasks[index].pinned;
+  saveToLocalStorage();
+  filterTasks();
+}
+function isLocalStorageFull(data) {
+  try {
+    // thử lưu dữ liệu tạm
+    localStorage.setItem("__test__", data);
+    localStorage.removeItem("__test__");
+    return false; // chưa đầy
+  } catch (e) {
+    return true; // đầy
+  }
+}
+
+
+
+  function addTask() {
+  const task = document.getElementById("taskInput").value.trim();
+  const note = document.getElementById("noteInput").value.trim();
+
+  if (isStorageFull) {
+    showToast("Không thể thêm vì bộ nhớ đã đầy.");
+    return;
+  }
+
+  if (task === "") {
+    alert("Vui lòng nhập công việc!");
+    return;
+  }
+
+  const newTask = {
+    task,
+    note,
+    status: "Chưa làm",
+    date: new Date().toLocaleDateString("vi-VN"),
+    pinned: false // 🆕 mặc định công việc mới chưa ghim
+  };
+
+  const tempData = JSON.stringify([newTask, ...tasks]);
+
+  if (isLocalStorageFull(tempData)) {
+    showToast("Bộ nhớ gần đầy! Không thể thêm công việc.");
+    disableAddButton();
+    return;
+  }
+
+  tasks.unshift(newTask);
+  saveToLocalStorage();
+  filterTasks();
+
+  document.getElementById("taskInput").value = "";
+  document.getElementById("noteInput").value = "";
+  showToast("Đã thêm công việc mới.");
+  
+
+  
+}
+
+
+
+   function deleteTask(index) {
+  if (currentUser === "all") {
+    showToast("❌ Không thể xóa trong chế độ 'Tất cả'!");
+    return;
+  }
+
+  if (confirm("Bạn có chắc muốn xóa công việc này không?")) {
+    tasks.splice(index, 1);
+
+    // Lưu lại đúng kho người dùng hiện tại
+    localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(tasks));
+
+    closeModal("detailModal");
+    filterTasks();
+    showToast("🗑️ Đã xóa công việc thành công!");
+  }
+}
+
+
+    function editTask(index) {
+      const taskObj = tasks[index];
+      const newTask = prompt("Sửa công việc:", taskObj.task);
+      if (newTask === null) return;
+
+      const newNote = prompt("Sửa ghi chú:", taskObj.note);
+      if (newNote === null) return;
+
+      tasks[index] = { 
+  task: newTask.trim(), 
+  note: newNote.trim(),
+  status: tasks[index].status // giữ nguyên trạng thái
+};
+
+      saveToLocalStorage();
+      closeModal('detailModal');
+      filterTasks();
+    }
+
+    function showDetails(index) {
+  currentDetailIndex = index;
+  const task = tasks[index];
+
+  document.getElementById("modalStt").innerText = index + 1;
+  document.getElementById("modalTask").innerText = task.task;
+  document.getElementById("modalNote").innerText = task.note;
+  document.getElementById("modalDate").value = task.date || "";
+
+
+  // Gán trạng thái vào dropdown
+  const modalStatus = document.getElementById("modalStatus");
+  const status = (task.status || "").trim().toLowerCase();
+  const validStatuses = ["chưa làm", "đang làm", "hoàn thành"];
+  modalStatus.value = validStatuses.includes(status) ? capitalize(status) : "Chưa làm";
+
+  // Reset chế độ chỉnh sửa
+  const taskDiv = document.getElementById("modalTask");
+  const noteDiv = document.getElementById("modalNote");
+  const editBtn = document.getElementById("editSaveBtn");
+
+  taskDiv.contentEditable = "false";
+  noteDiv.contentEditable = "false";
+  taskDiv.style.backgroundColor = "#e0e0e0";
+  noteDiv.style.backgroundColor = "#e0e0e0";
+  modalStatus.disabled = true;
+  editBtn.textContent = "Sửa";
+  isEditing = false;
+
+  document.getElementById("detailModal").style.display = "block";
+}
+
+// Hàm hỗ trợ viết hoa chữ cái đầu
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+
+
+function showExportModal() {
+  const exportBody = document.getElementById("exportBody");
+  exportBody.innerHTML = "";
+
+  const today = new Date();
+  const formattedDateTime = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()} - ${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
+  document.getElementById("exportTitle").innerText = `DANH SÁCH CÔNG VIỆC ${formattedDateTime}`;
+
+  const keyword = document.getElementById("searchInput").value.toLowerCase();
+  const selectedStatus = document.getElementById("statusFilter").value;
+  const startDateStr = document.getElementById("startDate").value;
+  const endDateStr = document.getElementById("endDate").value;
+
+  function parseDDMMYYYY(dateStr) {
+    const parts = dateStr.split("/");
+    const day = parts[0].padStart(2, "0");
+    const month = parts[1].padStart(2, "0");
+    const year = parts[2];
+    return new Date(`${year}-${month}-${day}`);
+  }
+
+  const startDate = startDateStr ? parseDDMMYYYY(startDateStr) : null;
+  const endDate = endDateStr ? parseDDMMYYYY(endDateStr) : null;
+
+  const filteredTasks = tasks.filter(task => {
+    const taskMatch =
+      task.task.toLowerCase().includes(keyword) ||
+      task.note.toLowerCase().includes(keyword);
+
+    const statusMatch =
+      selectedStatus === "" ||
+      (task.status || "").trim().toLowerCase() === selectedStatus.toLowerCase();
+
+    let dateMatch = true;
+    if ((startDate || endDate) && task.date && task.date.includes("/")) {
+      const taskDate = parseDDMMYYYY(task.date);
+      if (startDate && taskDate < startDate) dateMatch = false;
+      if (endDate && taskDate > endDate) dateMatch = false;
+    }
+
+    return taskMatch && statusMatch && dateMatch;
+  });
+
+  const statusOrder = { 'đang làm': 1, 'chưa làm': 2, 'hoàn thành': 3 };
+  filteredTasks.sort((a, b) => {
+    return (statusOrder[(a.status || '').toLowerCase()] || 99) - (statusOrder[(b.status || '').toLowerCase()] || 99);
+  });
+
+  filteredTasks.forEach((task, index) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${index + 1}</td>
+      <td>${task.task}</td>
+      <td>${task.note}</td>
+      <td>${task.status || ""}</td>
+      <td>${task.date || ""}</td> 
+    `;
+    exportBody.appendChild(row);
+  });
+
+
+      
+
+  document.getElementById("exportModal").style.display = "block";
+}
+
+    function captureExportImage() {
+      const exportContent = document.querySelector("#exportModal .modal-content");
+      const originalMaxHeight = exportContent.style.maxHeight;
+
+      document.querySelectorAll(".hide-when-capture").forEach(el => el.style.display = "none");
+
+      exportContent.style.maxHeight = "none";
+      exportContent.style.overflow = "visible";
+
+      html2canvas(exportContent, {
+        backgroundColor: "#fff",
+        scale: 2,
+        useCORS: true
+      }).then(canvas => {
+        const link = document.createElement("a");
+        link.download = "danh_sach_cong_viec.jpg";
+        link.href = canvas.toDataURL("image/jpeg");
+        link.click();
+
+        exportContent.style.maxHeight = originalMaxHeight || "80vh";
+        exportContent.style.overflow = "auto";
+        document.querySelectorAll(".hide-when-capture").forEach(el => el.style.display = "inline-block");
+      });
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).style.display = "none";
+    }
+
+    function showConfirmClearModal() {
+      document.getElementById("confirmClearModal").style.display = "block";
+    }
+
+    function clearAllTasks() {
+  if (tasks.length === 0) {
+    showToast("Không có công việc nào để xóa.");
+    closeModal('confirmClearModal')
+    return;
+  }
+
+  // Tạo file backup trước khi xóa
+  const backupBlob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(backupBlob);
+  link.download = `backup_cong_viec_${new Date().toLocaleDateString("vi-VN").replace(/\//g, "-")}.json`;
+  link.click();
+
+  // Xóa toàn bộ
+  tasks = [];
+  saveToLocalStorage();
+  closeModal('confirmClearModal');
+  filterTasks();
+
+  showToast("Đã xóa toàn bộ công việc! File backup đã được tải về.");
+}
+
+   
+
+
+  function showToast(message) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerText = message;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 7000);
+}
+
+
+    // window.onclick = function(event) {
+    //   if (event.target.classList.contains("modal")) {
+    //     event.target.style.display = "none";
+    //   }
+    // }
+    window.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") {
+      document.querySelectorAll(".modal").forEach(modal => {
+      modal.style.display = "none";
+        });
+      }
+    });
+
+    //window.onload = renderTable;
+    document.getElementById("statusFilter").addEventListener("change", filterTasks);
+
+
+function toggleEditTask() {
+  const taskDiv = document.getElementById("modalTask");
+  const noteDiv = document.getElementById("modalNote");
+  const modalStatus = document.getElementById("modalStatus");
+  const editSaveBtn = document.getElementById("editSaveBtn");
+
+  if (!isEditing) {
+    // Bật chế độ chỉnh sửa
+    taskDiv.contentEditable = "true";
+    noteDiv.contentEditable = "true";
+    taskDiv.style.backgroundColor = "#fff";
+    noteDiv.style.backgroundColor = "#fff";
+    modalStatus.disabled = false;
+
+    editSaveBtn.textContent = "Lưu";
+    isEditing = true;
+  } else {
+    // Lưu thay đổi
+    const updatedTask = taskDiv.innerText.trim();
+    const updatedNote = noteDiv.innerText.trim();
+    const updatedStatus = modalStatus.value;
+
+    if (updatedTask === "") {
+      alert("Công việc không được để trống!");
+      return;
+    }
+
+    // Cập nhật đúng công việc hiện tại
+    tasks[currentDetailIndex].task = updatedTask;
+    tasks[currentDetailIndex].note = updatedNote;
+    tasks[currentDetailIndex].status = updatedStatus;
+
+    saveToLocalStorage();
+    filterTasks();
+    showDetails(currentDetailIndex);
+
+    editSaveBtn.textContent = "Sửa";
+    isEditing = false;
+
+    // Đóng khóa chỉnh sửa
+    taskDiv.contentEditable = "false";
+    noteDiv.contentEditable = "false";
+    taskDiv.style.backgroundColor = "#e0e0e0";
+    noteDiv.style.backgroundColor = "#e0e0e0";
+    modalStatus.disabled = true;
+  }
+}
+  // xóa chi tiết
+  function openDeleteConfirmation() {
+    document.getElementById("confirmDeleteModal").style.display = "block";
+  }
+
+  function confirmDelete() {
+    tasks.splice(currentDetailIndex, 1);
+    saveToLocalStorage();
+    filterTasks();
+    closeModal("detailModal");
+    closeModal("confirmDeleteModal");
+    showToast("Đã xoá công việc!");
+    if (currentDetailIndex === -1) return;
+  }
+
+  // function closeModal(id) {
+  //   document.getElementById(id).style.display = "none";
+  // }
+
+  function editField(spanElement, field) {
+  const originalValue = spanElement.innerText;
+  const input = document.createElement("input");
+  input.value = originalValue;
+  input.classList.add("edit-input");
+  spanElement.replaceWith(input);
+  input.focus();
+
+  input.addEventListener("blur", () => saveEdit(input, field));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveEdit(input, field);
+  });
+}
+
+function saveEdit(inputElement, field) {
+  const newValue = inputElement.value.trim();
+  const span = document.createElement("span");
+  span.classList.add("editable-field");
+  span.setAttribute("ondblclick", `editField(this, '${field}')`);
+  span.innerText = newValue;
+
+  inputElement.replaceWith(span);
+
+  const taskIndex = spanIndex;
+  if (tasks[taskIndex]) {
+    tasks[taskIndex][field] = newValue;
+    saveTasks();
+    filterTasks(document.getElementById("searchInput").value);
+  }
+}
+
+function exportToJson() {
+  let tasksData = [];
+
+  if (currentUser === "all") {
+    // Gộp dữ liệu của tất cả người dùng (tự động)
+    tasksData = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith("tasks_") && key !== "tasks_all") {
+        const data = JSON.parse(localStorage.getItem(key) || "[]");
+        tasksData = tasksData.concat(data);
+      }
+    }
+  } else {
+    tasksData = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
+  }
+
+  const blob = new Blob([JSON.stringify(tasksData, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+
+  // 🔹 Tạo tên file tự động theo người dùng
+  const fileName =
+    currentUser === "all"
+      ? "tasks_all.json"
+      : `tasks_${currentUser}.json`;
+
+  link.download = fileName;
+  link.click();
+}
+
+
+  </script>
+  <script>
+  flatpickr("#startDate", {
+    dateFormat: "d/m/Y",
+    onChange: filterTasks
+  });
+
+  flatpickr("#endDate", {
+    dateFormat: "d/m/Y",
+    onChange: filterTasks
+  });
+  document.getElementById("clearDateFilter").addEventListener("click", () => {
+  // Xóa giá trị 2 input ngày
+  document.getElementById("startDate")._flatpickr.clear();  // Dùng Flatpickr API clear()
+  document.getElementById("endDate")._flatpickr.clear();
+
+  // Gọi lại hàm lọc để hiển thị tất cả
+  filterTasks();
+});
+
+document.getElementById("prevPageBtn").addEventListener("click", () => {
+  if (currentPage > 1) {
+    currentPage--;
+    filterTasks();
+  }
+});
+
+document.getElementById("nextPageBtn").addEventListener("click", () => {
+  currentPage++;
+  filterTasks();
+});
+// update file Json
+function handleJsonImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (currentUser === "all") {
+    showToast("❌ Không thể nhập dữ liệu trong chế độ 'Tất cả'!");
+    event.target.value = ""; // reset input
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error("Dữ liệu không hợp lệ");
+
+      // Lấy danh sách hiện tại của người dùng đang chọn
+      const currentTasks = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
+      const merged = [...currentTasks];
+
+      // Lọc trùng (trùng task + note + date)
+      data.forEach(task => {
+        const exists = merged.some(
+          t =>
+            t.task === task.task &&
+            t.note === task.note &&
+            t.date === task.date
+        );
+        if (!exists) merged.push(task);
+      });
+
+     localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(merged));
+  showToast(`✅ Đã nhập dữ liệu cho ${currentUser === "nhi" ? "Ms Nhi" : "Mr Quan"} (${data.length} dòng, ${merged.length - currentTasks.length} mới)`);
+
+  // Đồng bộ lại sau khi localStorage ghi xong
+  setTimeout(() => {
+  tasks = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
+  if (typeof filterTasks === "function") filterTasks();
+  }, 0);
+
+
+    } catch (err) {
+      console.error(err);
+      showToast("❌ Lỗi khi đọc file JSON!");
+    }
+  };
+  reader.readAsText(file);
+}
+
+
+function isValidTask(task) {
+  return task &&
+         typeof task === "object" &&
+         task.task &&
+         task.status &&
+         ["Chưa làm", "Đang làm", "Hoàn thành"].includes(task.status) &&
+         task.date;
+}
+
+function generateTaskKey(task) {
+  // Đảm bảo note luôn là chuỗi
+  return `${task.task}|${task.note || ""}|${task.date}`;
+}
+</script>
+
+<!-- Modal đăng nhập -->
+<div id="unlockModal" class="modal" style="display: block;background-color: rgba(0, 0, 0, 0.4); 
+  backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);  z-index: 9999 ; margin-bottom: 100px;">
+  <div style="margin: 8% auto; padding: 45px; background-color: #f2f2f2; border-radius: 16px; width: 300px; text-align: center;  border-color: red; ">
+    <img src="anh_ngau.jpg" alt="avatar" style="width: 75px; height: 75px; border-radius: 50%; object-fit: cover; margin-bottom: 16px;">
+    <h2 style="color: #080707; font-size: 20px; margin-bottom: 20px;">Hiếu</h2>
+    <input type="password" id="unlockInput" placeholder="Nhập mã khóa" style="width: 80%; padding: 10px; margin-bottom: 10px; border-radius: 8px; border: solid; font-size: 14px;">
+    <button onclick="checkUnlockCode()" style="background-color: #dba334; color: rgb(10, 1, 1); padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">MỞ</button>
+    <p id="unlockError" style="color: red; display: none;">Sai mã khóa!</p>
+  </div>
+</div>
+
+<script>
+
+  function lockScreen() {
+    const modal = document.getElementById("unlockModal");
+    modal.style.display = "block";
+    document.getElementById("unlockInput").value = "";
+    document.getElementById("unlockError").style.display = "none";
+    // document.body.style.overflow = "hidden"; // Khoá cuộn
+  }
+  function checkUnlockCode() {
+    const code = document.getElementById("unlockInput").value.trim();
+    if (code === "78945607") {
+      document.getElementById("unlockModal").style.display = "none";
+    } else {
+      document.getElementById("unlockError").style.display = "block";
+    }
+  }
+
+  // Cấm thao tác bên ngoài khi chưa mở khóa
+  document.addEventListener("DOMContentLoaded", () => {
+    document.body.style.overflow = "hidden"; // Ẩn cuộn
+    const interval = setInterval(() => {
+      if (document.getElementById("unlockModal").style.display === "none") {
+        document.body.style.overflow = "auto"; // Mở cuộn
+        clearInterval(interval);
+      }
+    }, 100);
+
+    document.getElementById("unlockInput").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        checkUnlockCode();
+      }})
+  });
+
+  // 🚫 Chặn ESC khi modal đang mở
+  document.addEventListener("keydown", function (event) {
+    const modal = document.getElementById("unlockModal");
+    if (modal && modal.style.display === "block" && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+  let inactivityTimer;
+  // tự động khoá màn hình sau 5p
+
+function resetInactivityTimer() {
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(() => {
+    lockScreen();
+  },  30* 60 * 1000); // 5 phút = 300.000 ms
+}
+
+// Theo dõi các hoạt động của người dùng
+['mousemove', 'keydown', 'scroll', 'click'].forEach(event => {
+  document.addEventListener(event, resetInactivityTimer);
+});
+
+// Khởi động bộ đếm ngay khi trang load
+document.addEventListener("DOMContentLoaded", resetInactivityTimer);
+
+</script>
+<script>
+
+  
+
+  function remindUnfinishedTasks() {
+  const chuaLamDates = tasks
+    .filter(task => (task.status || "").trim().toLowerCase() === "chưa làm")
+    .map(task => task.date || "chưa rõ ngày");
+
+  const dangLamDates = tasks
+    .filter(task => (task.status || "").trim().toLowerCase() === "đang làm")
+    .map(task => task.date || "chưa rõ ngày");
+
+  if (chuaLamDates.length > 0 || dangLamDates.length > 0) {
+    let message = "🔔 Chú ý:";
+
+    if (chuaLamDates.length > 0) {
+      const uniqueChuaLam = [...new Set(chuaLamDates)].join(", ");
+      message += `\n ${chuaLamDates.length} công việc chưa làm ngày ${uniqueChuaLam}`;
+    }
+
+    if (dangLamDates.length > 0) {
+      const uniqueDangLam = [...new Set(dangLamDates)].join(", ");
+      message += `\n ${dangLamDates.length} công việc đang làm ngày ${uniqueDangLam}`;
+    }
+
+    showToast(message);
+    showSystemNotification("Nhắc nhở công việc", message);
+    
+  }
+}
+
+
+
+window.onload = () => {
+  renderTable();
+  remindUnfinishedTasks(); 
+  // Tự động nhắc sau mỗi 60 giây
+  setInterval(remindUnfinishedTasks, 6000000 ); // 60,000ms = 60s
+};
+
+</script>
+<script>
+function showWeatherModal() {
+  const modal = document.getElementById("weatherModal");
+  const content = document.getElementById("weatherContent");
+  modal.style.display = "block";
+  content.innerHTML = "Đang lấy vị trí...";
+
+  const API_KEY = "158d60200cbd4115b67e68cb32ad7561"; // thay bằng key đã xác nhận
+
+  if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&lang=vi&units=metric`)
+          .then(res => res.json())
+          .then(data => {
+            const name = data.name;
+            const country = data.sys.country;
+            const temp = data.main.temp.toFixed(1);
+            const humidity = data.main.humidity;
+            const wind = data.wind.speed;
+            const description = data.weather[0].description;
+
+            content.innerHTML = `
+              <p><strong>📍 Địa điểm:</strong> ${name}, ${country}</p>
+              <p><strong>🌡️ Nhiệt độ:</strong> ${temp}°C</p>
+              <p><strong>💧 Độ ẩm:</strong> ${humidity}%</p>
+              <p><strong>💨 Gió:</strong> ${wind} m/s</p>
+              <p><strong>🌥️ Trạng thái:</strong> ${description}</p>
+            `;
+          })
+          .catch(err => {
+            console.error(err);
+            content.innerHTML = "Không thể lấy dữ liệu thời tiết.";
+          });
+      },
+      (error) => {
+        console.warn(error);
+        content.innerHTML = "Không lấy được vị trí. Hãy cho phép truy cập vị trí để xem thời tiết.";
+      }
+    );
+  } else {
+    content.innerHTML = "Trình duyệt của bạn không hỗ trợ định vị.";
+  }
+}
+
+function closeWeatherModal() {
+  document.getElementById("weatherModal").style.display = "none";
+}
+// Bấm ESC để tắt modal
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape") {
+    closeWeatherModal();
+  }
+});
+
+</script>
+<script>
+let editingRepairIndex = -1;
+let currentEditingIndex = -1;
+
+
+let repairs = JSON.parse(localStorage.getItem("repairs")) || [];
+let repairPage = 1;
+const repairRowsPerPage = 5;
+// sửa lý chi phí ban đầu
+const chiphiInput = document.getElementById("chiphiInput");
+
+chiphiInput.addEventListener("input", function (e) {
+  const input = e.target;
+  const rawValue = input.value;
+
+  // Ghi lại vị trí con trỏ trước khi thay đổi
+  const oldCursor = input.selectionStart;
+
+  // Lấy tất cả chữ số
+  const digits = rawValue.replace(/\D/g, "");
+
+  if (!digits) {
+    input.value = "";
+    return;
+  }
+
+  // Định dạng dấu chấm hàng nghìn
+  const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+  // Tính lại vị trí con trỏ dựa trên số chữ số trước con trỏ cũ
+  let digitCountBeforeCursor = 0;
+  for (let i = 0; i < oldCursor; i++) {
+    if (/\d/.test(rawValue[i])) digitCountBeforeCursor++;
+  }
+
+  // Gán lại giá trị đã định dạng
+  input.value = formatted;
+
+  // Tìm vị trí mới tương ứng của con trỏ
+  let newCursor = 0;
+  let digitSeen = 0;
+  for (let i = 0; i < formatted.length; i++) {
+    if (/\d/.test(formatted[i])) digitSeen++;
+    if (digitSeen === digitCountBeforeCursor) {
+      newCursor = i + 1;
+      break;
+    }
+  }
+
+  // Cập nhật lại vị trí con trỏ sau 1 tick
+  setTimeout(() => {
+    input.setSelectionRange(newCursor, newCursor);
+  }, 0);
+});
+
+
+function showRepairModal() {
+  document.getElementById("repairModal").style.display = "block";
+  if (editingRepairIndex === -1) {
+    repairPage = 1;
+    renderRepairTable(); // chỉ khi thêm mới
+  }
+}
+
+function closeRepairModal() {
+  document.getElementById("repairModal").style.display = "none";
+}
+
+function addRepairRow() {
+  const phutung = document.getElementById("phutungInput").value.trim();
+  const diadiem = document.getElementById("diadiemInput").value.trim();
+  const thoigian = document.getElementById("thoigianInput").value.trim();
+  const chiphi = document.getElementById("chiphiInput").value.trim();
+
+  function isValidDateFormat(dateStr) {
+  const regex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
+  return regex.test(dateStr);
+  }
+
+
+  if (!phutung || !diadiem || !thoigian || !chiphi) {
+    alert("Vui lòng nhập đầy đủ thông tin!");
+    return;
+  }
+  if (!isValidDateFormat(thoigian)) {
+  alert("Vui lòng nhập đúng định dạng ngày: dd/mm/yyyy");
+  return;
+  } 
+
+  const parsedChiPhi = parseInt(chiphi.replace(/\./g, ""));
+
+if (editingRepairIndex >= 0) {
+  // SỬA
+  repairs[editingRepairIndex] = {
+    phutung,
+    diadiem,
+    thoigian,
+    chiphi: parsedChiPhi
+  };
+  showToast("✏️ Đã sửa thông tin! ");
+  editingRepairIndex = -1;
+} else {
+  // THÊM MỚI
+  repairs.unshift({
+    phutung,
+    diadiem,
+    thoigian,
+    chiphi: parsedChiPhi
+  });
+  repairPage = 1;
+  showToast("✅ Đã thêm mới thông tin!");
+}
+
+
+  saveRepairs();
+  repairPage = 1;
+  renderRepairTable();
+
+  // Reset input
+  document.getElementById("phutungInput").value = "";
+  document.getElementById("diadiemInput").value = "";
+  document.getElementById("thoigianInput").value = "";
+  document.getElementById("chiphiInput").value = "";
+}
+
+function renderRepairTable() {
+  const tbody = document.getElementById("repairTableBody");
+  tbody.innerHTML = "";
+
+  const searchInput = document.getElementById("repairSearchInput");
+  const searchText = (searchInput?.value || "").toLowerCase();
+
+  const filteredRepairs = repairs.filter(item => {
+    const pt = item.phutung?.toLowerCase() || "";
+    const dd = item.diadiem?.toLowerCase() || "";
+    const tg = item.thoigian?.toLowerCase() || "";
+    const cp = item.chiphi?.toString() || "";
+    return (
+      pt.includes(searchText) ||
+      dd.includes(searchText) ||
+      tg.includes(searchText) ||
+      cp.includes(searchText)
+    );
+  });
+
+  filteredRepairs.sort((a, b) => {
+  const [d1, m1, y1] = a.thoigian.split("/").map(Number);
+  const [d2, m2, y2] = b.thoigian.split("/").map(Number);
+
+  const dateA = new Date(y1, m1 - 1, d1);
+  const dateB = new Date(y2, m2 - 1, d2);
+
+  return dateB - dateA; // mới nhất lên đầu
+});
+
+
+  // ✅ Tính tổng chi phí từ toàn bộ dòng đã lọc (không giới hạn theo trang)
+  const total = filteredRepairs.reduce((sum, item) => sum + item.chiphi, 0);
+
+  const startIndex = (repairPage - 1) * repairRowsPerPage;
+  const endIndex = startIndex + repairRowsPerPage;
+  const paginatedRepairs = filteredRepairs.slice(startIndex, endIndex);
+
+  paginatedRepairs.forEach((item, displayIndex) => {
+    const row = document.createElement("tr");
+
+    const originalIndex = repairs.findIndex(r =>
+      r.phutung === item.phutung &&
+      r.diadiem === item.diadiem &&
+      r.thoigian === item.thoigian &&
+      r.chiphi === item.chiphi
+    );
+      row.addEventListener("contextmenu", function (e) {
+  e.preventDefault(); // ✅ Ngăn menu chuột phải
+  editRepair(originalIndex); // ✅ Gọi sửa
+});
+
+row.addEventListener("dblclick", function () {
+  confirmDelete1(originalIndex); // ✅ Gọi xoá
+});
+
+    row.setAttribute("onmouseover", "this.style.backgroundColor='#fff8b3'");
+    row.setAttribute("onmouseout", "this.style.backgroundColor=''");
+
+    row.innerHTML = `
+      <td>${startIndex + displayIndex + 1}</td>
+      <td>${item.phutung}</td>
+      <td>${item.diadiem}</td>
+      <td>${item.thoigian}</td>
+      <td>${item.chiphi.toLocaleString("vi-VN")} VND</td>
+    `;
+
+    tbody.appendChild(row);
+  });
+
+  // ✅ Hiển thị tổng sau khi render
+  document.getElementById("totalCost").textContent = `Tổng chi phí: ${total.toLocaleString("vi-VN")} VND`;
+
+  renderRepairPagination(filteredRepairs.length);
+
+}
+
+
+function renderRepairPagination(totalItems) {
+  const pageCount = Math.ceil(totalItems / repairRowsPerPage);
+  const container = document.getElementById("repairPagination");
+  container.innerHTML = "";
+
+  if (pageCount <= 1) return;
+
+  const createButton = (text, page, disabled = false, active = false) => {
+    const btn = document.createElement("button");
+    btn.textContent = text;
+    btn.disabled = disabled;
+    if (active) btn.className = "active-page";
+    btn.onclick = () => {
+      repairPage = page;
+      renderRepairTable();
+    };
+    container.appendChild(btn);
+  };
+
+  // Mũi tên điều hướng
+  createButton("«", 1, repairPage === 1);
+  createButton("<", repairPage - 1, repairPage === 1);
+
+  // Hiển thị dãy số trang gần trang hiện tại
+  const visibleRange = 2;
+  let start = Math.max(1, repairPage - visibleRange);
+  let end = Math.min(pageCount, repairPage + visibleRange);
+
+  if (repairPage <= visibleRange) {
+    end = Math.min(pageCount, end + (visibleRange - repairPage + 1));
+  }
+
+  if (repairPage >= pageCount - visibleRange + 1) {
+    start = Math.max(1, start - (repairPage - (pageCount - visibleRange)));
+  }
+
+  for (let i = start; i <= end; i++) {
+    createButton(i, i, false, i === repairPage);
+  }
+
+  createButton(">", repairPage + 1, repairPage === pageCount);
+  createButton("»", pageCount, repairPage === pageCount);
+}
+
+
+function confirmDelete1(index) {
+  const item = repairs[index];
+  const message = `Bạn có chắc muốn xoá dòng sau?\n- Phụ tùng: ${item.phutung}\n- Chi phí: ${item.chiphi.toLocaleString("vi-VN")} VND`;
+
+  showConfirmModal(message, () => {
+    repairs.splice(index, 1);
+    showToast("🗑️ Đã xoá phụ tùng sửa chữa");
+
+    saveRepairs();
+    if ((repairPage - 1) * repairRowsPerPage >= repairs.length) {
+      repairPage = Math.max(1, repairPage - 1);
+    }
+    renderRepairTable();
+  });
+}
+
+function editRepair(index) {
+  const item = repairs[index];
+  currentEditingIndex = index;
+
+  // ✅ Gán vào các input của modal sửa (editRepairModal)
+  document.getElementById("editPhutungInput").value = item.phutung;
+  document.getElementById("editDiadiemInput").value = item.diadiem;
+  document.getElementById("editThoigianInput").value = item.thoigian;
+  document.getElementById("editChiphiInput").value = item.chiphi.toLocaleString("vi-VN");
+
+  showEditRepairModal();
+}
+
+function showEditRepairModal() {
+  const modal = document.getElementById("editRepairModal");
+  if (modal) modal.style.display = "block";
+}
+
+
+
+
+function saveRepairs() {
+  localStorage.setItem("repairs", JSON.stringify(repairs));
+}
+
+function downloadBackupFile(data, filename = "repair-backup.json") {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  
+  URL.revokeObjectURL(url); // Giải phóng bộ nhớ
+}
+
+
+// Đóng bằng ESC
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape") {
+    closeRepairModal();
+  }
+});
+
+// xóa tất cả
+document.getElementById("clearAllRepairsBtn").addEventListener("click", function () {
+  if (repairs.length === 0) {
+    alert("Không có dữ liệu để xoá.");
+    return;
+  }
+
+  showConfirmModal("Bạn có chắc muốn xoá toàn bộ dữ liệu sửa chữa?", () => {
+  if (repairs.length > 0) {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, "-");
+    const filename = `repair-backup-${timestamp}.json`;
+    downloadBackupFile(repairs, filename);
+  }
+
+  repairs = [];
+  saveRepairs();
+  renderRepairTable();
+  showToast("🗑️ Đã xoá toàn bộ & lưu file backup");
+});
+
+});
+
+
+
+// thêm modal
+let confirmAction = null;
+
+function showConfirmModal(message, onConfirm) {
+  document.getElementById("confirmMessage").textContent = message;
+  document.getElementById("confirmModal").style.display = "flex";
+  confirmAction = onConfirm;
+}
+
+document.getElementById("confirmYes").addEventListener("click", function () {
+  if (typeof confirmAction === "function") confirmAction();
+  document.getElementById("confirmModal").style.display = "none";
+});
+
+document.getElementById("confirmNo").addEventListener("click", function () {
+  document.getElementById("confirmModal").style.display = "none";
+});
+
+// input dữ liệu
+function handleRepairJsonImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    try {
+      const importedData = JSON.parse(e.target.result);
+
+      if (!Array.isArray(importedData)) {
+        showToast("❌ Dữ liệu không phải là danh sách sửa chữa!");
+        return;
+      }
+
+      const MAX_IMPORT = 1000;
+      if (importedData.length > MAX_IMPORT) {
+        showToast(`⚠️ File có quá nhiều dòng (${importedData.length}). Giới hạn là ${MAX_IMPORT}.`);
+        return;
+      }
+
+      const currentRepairs = JSON.parse(localStorage.getItem("repairs") || "[]");
+
+      // Xác định key duy nhất để kiểm tra trùng
+      const generateRepairKey = (r) =>
+        `${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`;
+
+      const existingKeys = new Set(currentRepairs.map(generateRepairKey));
+
+      const newRepairs = importedData
+        .filter(r =>
+          r &&
+          typeof r.phutung === "string" &&
+          typeof r.diadiem === "string" &&
+          typeof r.thoigian === "string" &&
+          typeof r.chiphi === "number"
+        )
+        .filter(r => !existingKeys.has(generateRepairKey(r)));
+
+      if (newRepairs.length === 0) {
+        showToast("ℹ️ Không có dòng mới nào được thêm (toàn bộ đã tồn tại hoặc sai định dạng).");
+        return;
+      }
+
+      const updatedRepairs = currentRepairs.concat(newRepairs);
+      localStorage.setItem("repairs", JSON.stringify(updatedRepairs));
+
+      showToast(`✅ Đã thêm ${newRepairs.length} dòng (bỏ qua ${importedData.length - newRepairs.length} dòng trùng hoặc sai định dạng)`);
+
+      setTimeout(() => location.reload(), 2000);
+
+    } catch (err) {
+      showToast("❌ Không thể đọc file JSON! Có thể file bị hỏng hoặc sai cú pháp.");
+      console.error("Lỗi đọc file sửa chữa:", err);
+    }
+  };
+
+  reader.readAsText(file);
+}
+function saveEditedRepair() {
+  const pt = document.getElementById("editPhutungInput").value.trim();
+  const dd = document.getElementById("editDiadiemInput").value.trim();
+  const tg = document.getElementById("editThoigianInput").value.trim();
+  const cp = document.getElementById("editChiphiInput").value.trim();
+
+  const parsedCost = parseInt(cp.replace(/\./g, ""));
+  const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
+
+  if (!pt || !dd || !tg || !cp) {
+    alert("Vui lòng điền đầy đủ thông tin!");
+    return;
+  }
+
+  if (!dateRegex.test(tg)) {
+    alert("Sai định dạng ngày. Dùng dd/mm/yyyy.");
+    return;
+  }
+
+  repairs[currentEditingIndex] = {
+    phutung: pt,
+    diadiem: dd,
+    thoigian: tg,
+    chiphi: parsedCost,
+  };
+
+  saveRepairs();
+  renderRepairTable();
+  closeEditRepairModal();
+}
+
+function closeEditRepairModal() {
+  document.getElementById("editRepairModal").style.display = "none";
+  currentEditingIndex = -1;
+}
+const editChiPhiInput = document.getElementById("editChiphiInput");
+if (editChiPhiInput) {
+  editChiPhiInput.addEventListener("input", function (e) {
+    const input = e.target;
+    const rawValue = input.value;
+    const digits = rawValue.replace(/\D/g, "");
+    if (!digits) return input.value = "";
+
+    const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    input.value = formatted;
+  });
+}
+</script>
+<script>
+  let cheDoSuaGhiChu = false;
+
+function moModalGhiChu() {
+  const textarea = document.getElementById("noiDungGhiChu");
+  const daLuu = localStorage.getItem("ghiChu") || "";
+  const thoiGianLuu = localStorage.getItem("ghiChu_lastSaved");
+
+  textarea.value = daLuu;
+  textarea.setAttribute("readonly", true);
+  textarea.classList.add("readonly-field");
+  cheDoSuaGhiChu = false;
+
+  document.getElementById("btnSuaGhiChu").textContent = "✏️ Sửa";
+  document.getElementById("modalGhiChu").style.display = "flex";
+
+  capNhatThoiGianLuu(thoiGianLuu);
+}
+
+function dongModalGhiChu() {
+  document.getElementById("modalGhiChu").style.display = "none";
+}
+
+function batCheDoSuaGhiChu() {
+  const textarea = document.getElementById("noiDungGhiChu");
+
+  if (!cheDoSuaGhiChu) {
+    // Chuyển sang chế độ sửa
+    textarea.removeAttribute("readonly");
+    textarea.classList.remove("readonly-field");
+    textarea.focus();
+    cheDoSuaGhiChu = true;
+    document.getElementById("btnSuaGhiChu").textContent = "💾 Lưu";
+  } else {
+    // Lưu nội dung ghi chú
+    const noiDung = textarea.value.trim();
+    localStorage.setItem("ghiChu", noiDung);
+
+    // Lưu thời gian
+    const thoiGianHienTai = new Date().toLocaleString("vi-VN");
+    localStorage.setItem("ghiChu_lastSaved", thoiGianHienTai);
+    capNhatThoiGianLuu(thoiGianHienTai);
+
+    textarea.setAttribute("readonly", true);
+    textarea.classList.add("readonly-field");
+    cheDoSuaGhiChu = false;
+    document.getElementById("btnSuaGhiChu").textContent = "✏️ Sửa";
+
+    // Hiệu ứng highlight khi lưu
+    textarea.classList.add("highlight-save");
+    setTimeout(() => textarea.classList.remove("highlight-save"), 500);
+
+    showToast("✅ Ghi chú đã được lưu.");
+  }
+}
+
+function capNhatThoiGianLuu(thoiGian) {
+  const lbl = document.getElementById("thoiGianLuu");
+  if (thoiGian) {
+    lbl.textContent = `🕒 Lần lưu gần nhất: ${thoiGian}`;
+  } else {
+    lbl.textContent = "🕒 Chưa có lần lưu nào";
+  }
+}
+// Đóng modal khi bấm phím ESC
+document.addEventListener("keydown", function (event) {
+  // Kiểm tra modal đang mở
+  const modal = document.getElementById("modalGhiChu");
+  if (event.key === "Escape" && modal.style.display === "flex") {
+    dongModalGhiChu();
+  }
+});
+
+
+
+</script>
+<!-- --- USER SWITCH SCRIPT: start --- -->
+<script>
+ currentUser = localStorage.getItem("currentUser") || "nhi";
+
+// Chuyển dữ liệu cũ sang Nhi nếu có
+if (localStorage.getItem("tasks") && !localStorage.getItem("tasks_nhi")) {
+  localStorage.setItem("tasks_nhi", localStorage.getItem("tasks"));
+  localStorage.removeItem("tasks");
+}
+
+// --- Hàm nạp dữ liệu theo người dùng ---
+function getTasksByUser(user) {
+  if (user === "all") {
+    const nhi = JSON.parse(localStorage.getItem("tasks_nhi") || "[]");
+    const quan = JSON.parse(localStorage.getItem("tasks_quan") || "[]");
+    return [...nhi, ...quan];
+  } else {
+    return JSON.parse(localStorage.getItem("tasks_" + user) || "[]");
+  }
+}
+
+function loadUserTasks() {
+  tasks = getTasksByUser(currentUser);
+  if (typeof filterTasks === "function") filterTasks();
+}
+
+// --- Ghi dữ liệu ---
+function saveToLocalStorage() {
+  if (currentUser === "all") return;
+  localStorage.setItem("tasks_" + currentUser, JSON.stringify(tasks));
+}
+
+// --- Chuyển người dùng ---
+function changeUser() {
+  const select = document.getElementById("userSelect");
+  if (!select) return;
+
+  currentUser = select.value;
+  localStorage.setItem("currentUser", currentUser);
+
+  // Nạp lại dữ liệu theo người dùng
+  loadTasksForCurrentUser();
+
+  // Reset về trang đầu (nếu có phân trang)
+  currentPage = 1;
+
+  // Cập nhật hiển thị
+  filterTasks();
+  updateUIForUser();
+
+  // 🔹 Cập nhật trạng thái nút "Thêm"
+  const addBtn = document.getElementById("addBtn"); // đúng id trong file của bạn
+  if (addBtn) {
+    const disable = currentUser === "all";
+    addBtn.disabled = disable;
+    addBtn.style.opacity = disable ? "0.6" : "1";
+    addBtn.style.cursor = disable ? "not-allowed" : "pointer";
+  }
+
+  // 🔹 (Tùy chọn) cập nhật các nút khác
+  const clearBtn = document.getElementById("clearBtn");
+  if (clearBtn) clearBtn.disabled = currentUser === "all";
+  const importInput = document.getElementById("importJsonInput");
+  if (importInput) importInput.disabled = currentUser === "all";
+
+  showToast(`Đã chuyển sang: ${currentUser === "all" ? "Tất cả" : currentUser}`);
+}
+
+
+// --- Bảo vệ khi ở chế độ tất cả ---
+function editableCheck() {
+  if (currentUser === "all") {
+    showToast("❌ Chế độ 'Tất cả' chỉ xem - không thể chỉnh sửa.");
+    closeModal('confirmDeleteModal');
+    return false;
+  }
+  return true;
+}
+
+// --- Ghi đè các hàm thêm / sửa / xóa để kiểm tra người dùng ---
+const origAddTask = typeof addTask === "function" ? addTask : null;
+if (origAddTask) {
+  addTask = function() {
+    if (!editableCheck()) return;
+    origAddTask();
+  };
+}
+
+if (typeof toggleEditTask === "function") {
+  const orig = toggleEditTask;
+  toggleEditTask = function() {
+    if (!editableCheck()) return;
+    orig();
+  };
+}
+
+if (typeof confirmDelete === "function") {
+  const orig = confirmDelete;
+  confirmDelete = function() {
+    if (!editableCheck()) return;
+    orig();
+  };
+}
+
+// --- Cập nhật khi trang tải ---
+document.addEventListener("DOMContentLoaded", () => {
+  const select = document.getElementById("userSelect");
+  if (select) select.value = currentUser;
+  document.getElementById("addBtn").disabled = (currentUser === "all");
+  loadUserTasks();
+});
+</script>
+<!-- --- USER SWITCH SCRIPT: end --- -->
+<script>
+  // --- QUẢN LÝ NGƯỜI DÙNG ĐỘNG ---
+let currentUser = localStorage.getItem("currentUser") || "nhi";
+
+// Khởi tạo danh sách người dùng mặc định
+function loadUsers() {
+  let users = JSON.parse(localStorage.getItem("users")) || ["nhi", "quan", "all"];
+  const select = document.getElementById("userSelect");
+  select.innerHTML = "";
+
+  // Tạo các option từ danh sách
+  users.forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u;
+    opt.textContent = (u === "nhi") ? "Ms Nhi" :
+                      (u === "quan") ? "Mr Quan" :
+                      (u === "all") ? "Tất cả" : u;
+    select.appendChild(opt);
+  });
+
+  // Thêm option đặc biệt để thêm user mới
+  const addOpt = document.createElement("option");
+  addOpt.value = "__add_new__";
+  addOpt.textContent = "➕ Thêm người dùng mới";
+  select.appendChild(addOpt);
+
+  // Chọn lại người dùng hiện tại
+  select.value = currentUser;
+}
+
+// Khi đổi người dùng
+function changeUser() {
+  const select = document.getElementById("userSelect");
+  const value = select.value;
+
+  if (value === "__add_new__") {
+    // Nếu chọn "Thêm người dùng mới"
+    select.value = currentUser;
+    document.getElementById("addUserModal").style.display = "block";
+    document.getElementById("newUserName").value = "";
+    return;
+  }
+
+  currentUser = value;
+  localStorage.setItem("currentUser", currentUser);
+
+  // 🔹 Lấy dữ liệu đúng theo user
+  if (currentUser === "all") {
+    const users = JSON.parse(localStorage.getItem("users")) || [];
+    let allTasks = [];
+    users.forEach(u => {
+      if (u !== "all") {
+        const data = JSON.parse(localStorage.getItem(`tasks_${u}`) || "[]");
+        allTasks = allTasks.concat(data);
+      }
+    });
+    tasks = allTasks;
+  } else {
+    tasks = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
+  }
+
+  // Cập nhật giao diện danh sách
+  currentPage = 1;
+  filterTasks();
+
+  // 🔹 Cập nhật trạng thái các nút thao tác
+  const addBtn = document.getElementById("addBtn");
+  if (addBtn) {
+    const disable = currentUser === "all";
+    addBtn.disabled = disable;
+    addBtn.style.opacity = disable ? "0.6" : "1";
+    addBtn.style.cursor = disable ? "not-allowed" : "pointer";
+  }
+
+  const clearBtn = document.getElementById("clearBtn");
+  if (clearBtn) clearBtn.disabled = currentUser === "all";
+  const importInput = document.getElementById("importJsonInput");
+  if (importInput) importInput.disabled = currentUser === "all";
+
+  // 🔹 Hiển thị thông báo
+  showToast(`👤 Đã chuyển sang người dùng: ${currentUser === "all" ? "Tất cả" : currentUser}`);
+}
+
+
+// Thêm người dùng mới
+function addNewUser() {
+  const name = document.getElementById("newUserName").value.trim();
+  if (!name) {
+    showToast("Vui lòng nhập tên người dùng!");
+    return;
+  }
+
+  // Lấy danh sách user từ localStorage
+  let users = JSON.parse(localStorage.getItem("users")) || ["nhi", "quan", "all"];
+  if (users.includes(name)) {
+    showToast("Tên người dùng đã tồn tại!");
+    return;
+  }
+
+  // Lưu user mới vào danh sách
+  users.push(name);
+  localStorage.setItem("users", JSON.stringify(users));
+  localStorage.setItem(`tasks_${name}`, JSON.stringify([]));
+
+  // Thêm vào dropdown
+  const select = document.getElementById("userSelect");
+  const option = document.createElement("option");
+  option.value = name;
+  option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+  const allOption = select.querySelector("option[value='all']");
+  if (allOption) select.insertBefore(option, allOption);
+  else select.appendChild(option);
+
+  // Chuyển sang người mới
+  currentUser = name;
+  localStorage.setItem("currentUser", currentUser);
+
+  // Reset dữ liệu tránh dính dữ liệu cũ
+  tasks = [];
+  saveToLocalStorage();
+
+  // Cập nhật UI
+  select.value = name;
+  changeUser();
+  
+  document.getElementById("newUserName").value = "";
+  closeModal("addUserModal");
+  currentPage = 1;
+  filterTasks();
+
+  showToast(`✅ Đã thêm người dùng "${name}" và chuyển sang người này.`);
+}
+
+
+// Xóa người dùng hiện tại
+function deleteCurrentUser() {
+  if (currentUser === "all") {
+  showToast("⚠️ Không thể xóa người dùng 'Tất cả' vì đây là chế độ tổng hợp dữ liệu!");
+  return;
+  }
+
+  if (!confirm(`Bạn có chắc muốn xóa người dùng "${currentUser}" và toàn bộ dữ liệu của họ không?`))
+    return;
+
+  let users = JSON.parse(localStorage.getItem("users")) || [];
+  users = users.filter(u => u !== currentUser);
+  localStorage.setItem("users", JSON.stringify(users));
+
+  localStorage.removeItem(`tasks_${currentUser}`);
+
+  showToast(`🗑️ Đã xóa người dùng: ${currentUser}`);
+
+  currentUser = "all";
+  localStorage.setItem("currentUser", currentUser);
+
+  closeModal("addUserModal");
+  loadUsers();
+  changeUser();
+}
+
+// --- Gọi khi load trang ---
+document.addEventListener("DOMContentLoaded", loadUsers);
+
+</script>
+<script>
+ // 📢 Thông báo ngoài màn hình (có tương tác khi nhấp)
+function showSystemNotification(title, message, type = "info") {
+  if (!("Notification" in window)) return;
+
+  // 🎨 Biểu tượng & âm thanh theo loại
+  const icons = {
+    info: "https://cdn-icons-png.flaticon.com/512/906/906343.png",
+    success: "https://cdn-icons-png.flaticon.com/512/190/190411.png",
+    warning: "https://cdn-icons-png.flaticon.com/512/595/595067.png",
+    error: "https://cdn-icons-png.flaticon.com/512/564/564619.png",
+    task: "https://cdn-icons-png.flaticon.com/512/1828/1828817.png"
+  };
+
+  const sounds = {
+    info: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_2f5066dce0.mp3?filename=notification-tone-28656.mp3",
+    success: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_5d5b4f2c6b.mp3?filename=correct-2-46134.mp3",
+    warning: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c06f9f7397.mp3?filename=error-126627.mp3"
+  };
+
+  const icon = icons[type] || icons.info;
+  const sound = sounds[type] || sounds.info;
+
+  // ✅ Nếu có quyền thì hiển thị luôn
+  if (Notification.permission === "granted") {
+    const noti = new Notification("⚠️ " + title, {
+      body: message,
+      icon: icon,
+      badge: icon,
+      silent: false,
+      requireInteraction: true // giữ lại đến khi bấm hoặc đóng
+    });
+
+    // 🔊 Phát âm thanh nhẹ
+    const audio = new Audio(sound);
+    audio.volume = 0.4;
+    audio.play().catch(() => {});
+
+    // ⏰ Tự đóng sau 10 giây
+    //setTimeout(() => noti.close(), 10000);
+
+    // 🖱️ Khi người dùng nhấp vào thông báo
+    noti.onclick = function (event) {
+      event.preventDefault();
+      // Mở hoặc chuyển sang phần mềm (tab chính)
+      window.focus(); // đưa tab hiện tại ra trước
+      window.location.href = "index_with_users_plus.html"; // hoặc đường dẫn khác của phần mềm
+      noti.close();
+    };
+  }
+
+  // 🚪 Nếu chưa xin quyền
+  else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then(permission => {
+      if (permission === "granted") {
+        showSystemNotification(title, message, type);
+      }
+    });
+  }
+}
+</script>
+</body>
+</html>

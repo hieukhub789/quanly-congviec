@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Quản lý đơn Grab / Be</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+   tbody tr:hover {
+  background-color: #fff3cd; /* vàng nhạt */
+  }
+
+  tr:nth-child(even) {
+  background-color: #fafafa;
+  }
+
+  tbody tr:hover {
+  background-color: #fff3cd;
+  }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .form-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      max-width: 1000px;
+      margin: 0 auto 30px;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    label {
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    .full-row {
+      grid-column: span 3;
+      text-align: center;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #f0f0f0;
+    }
+
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+
+    #searchInput {
+      width: 100%;
+      max-width: 300px;
+      padding: 12px;
+      margin: 0 auto 16px;
+      display: block;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(0, 0, 0, 0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 500px;
+    }
+
+    .modal-content input {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .form-container {
+        grid-template-columns: 1fr;
+      }
+
+      .full-row {
+        grid-column: span 1;
+      }
+    }
+
+    .readonly-field {
+      background-color: #e0e0e0;
+    }
+
+    .toast {
+  position: fixed;
+  top: 20px;
+  right: -400px;
+  background-color: #28a745;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  font-size: 16px;
+  z-index: 2000;
+  transition: right 0.5s ease;
+}
+.toast.show {
+  right: 20px;
+}
+
+.modal-content.modal-lichsu {
+  background-color: #fff;
+  width: 90vw;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+/* Tiêu đề modal */
+.modal-title {
+  margin-bottom: 15px;
+  font-size: 20px;
+}
+
+/* Bảng lịch sử */
+.lichsu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  text-align: left;
+}
+
+.lichsu-table th, .lichsu-table td {
+  padding: 8px;
+  border: 1px solid #ccc;
+}
+
+.lichsu-table thead {
+  background-color: #f0f0f0;
+}
+
+/* Nút đóng */
+.modal-footer {
+  margin-top: 20px;
+}
+
+.btn-dong {
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-dong:hover {
+  background-color: #0056b3;
+}
+
+.btn-xoa-tatca {
+  padding: 8px 16px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.btn-xoa-tatca:hover {
+  background-color: #b52a37;
+}
+.btn-xuat-csv {
+  padding: 6px 3px;
+  background-color: #651fb1;
+  color: white;
+  border: none;
+  margin-top: 8px;
+  border-radius: 4px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.btn-xuat-csv:hover {
+  background-color: #2fd2e4;
+}
+.so-am {
+  color: red;
+  font-weight: bold;
+}
+
+  </style>
+  <!-- Flatpickr -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+</head>
+<body>
+
+<h2>Quản lý đơn Grab / Be</h2>
+
+<div class="form-container">
+  <div class="form-group"><label>Ngày gửi</label><input type="text" id="ngayGui" placeholder="dd/mm/yyyy"></div>
+  <div class="form-group"><label>Người nhận</label><input type="text" id="nguoiNhan"></div>
+  <div class="form-group"><label>Địa chỉ</label><input type="text" id="diaChi"></div>
+  <div class="form-group"><label>SĐT</label><input type="text" id="sdt" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
+  <div class="form-group"><label>Cước phí</label><input type="text" id="cuocPhi" oninput="dinhDangCuocPhi(this)"></div>
+  <div class="form-group"><label>Nội dung</label><input type="text" id="noiDung"></div>
+ <div class="form-group" style="position: relative;">
+  <label>Số tiền nhận</label>
+  <input type="text" id="stn" readonly class="readonly-field" />
+
+  <span id="lockIcon" onclick="moKhoa()" style="position:absolute; right:10px; top: 30px;cursor:pointer; margin-bottom: 10px; ">
+    🔒
+  </span>
+</div>
+
+
+  <div class="full-row">
+    <button onclick="themDon()">Thêm đơn</button>
+    <button onclick="hienModalXacNhan('tatca')" style="background-color: #dc3545;">Xoá toàn bộ dữ liệu</button>
+    <button onclick="document.getElementById('jsonInput').click()" style="background-color: #28a745;">Nhập JSON</button>
+  <button onclick="xuatFileJson()" style="background-color: rgb(45, 11, 215);">Xuất JSON</button>
+  <button onclick="moLichSuModal()">Lịch sử thay đổi tiền nhận</button>
+
+  <input type="file" id="jsonInput" accept=".json" style="display:none" onchange="nhapFileJson(event)">
+  </div>
+</div>
+
+<input type="text" id="searchInput" oninput="timKiemDon()" placeholder="Tìm kiếm theo tên, địa chỉ, nội dung...">
+<div style="text-align: center; margin-bottom: 10px;">
+  <label>
+    Từ ngày:
+    <input type="text" id="startDate" placeholder="Từ ngày (dd/mm/yyyy)"  oninput="timKiemDon()">
+  </label>
+  <label style="margin-left: 10px;">
+    Đến ngày:
+    <input type="text" id="endDate" placeholder="Đến ngày (dd/mm/yyyy) "  oninput="timKiemDon()">
+  </label>
+  <button onclick="xoaLocNgay()" style="margin-left: 10px;">Xoá lọc ngày</button>
+</div>
+
+
+
+<table>
+  <thead>
+    <tr>
+      <th>STT</th>
+      <th>Ngày gửi</th>
+      <th>Người nhận</th>
+      <th>Địa chỉ</th>
+      <th>SĐT</th>
+      <th>Cước phí</th>
+      <th>Nội dung</th>
+    </tr>
+  </thead>
+  <tbody id="bangDon"></tbody>
+</table>
+
+
+<div style="text-align: center; margin-top: 20px;">
+  <button onclick="chuyenTrang(-1)">← Trước</button>
+  <span id="thongTinTrang" style="margin: 0 10px;"></span>
+  <button onclick="chuyenTrang(1)">Sau →</button>
+</div>
+<div id="thongKeDon" style="margin-top: 10px; font-weight: bold; text-align: left; font-size: 16px; color: #333;">
+  Tổng số đơn hàng: 0
+</div>
+<div id="tongTienNhan" style="text-align:right; font-weight:bold; margin-top:10px;">
+  Tổng số tiền nhận: 0 VND
+</div>
+<div id="tongCuocPhi" style="text-align:right; font-weight:bold; margin-top:4px;">
+  Tổng cước phí: 0 VND
+</div>
+<div id="soTienConLai" style="text-align:right; font-weight:bold; margin-top:4px;">
+  Số tiền còn lại: 0 VND
+</div>
+
+
+
+
+<!-- Modal chi tiết -->
+<div id="chiTietModal" class="modal">
+  <div class="modal-content">
+    <h3>Chi tiết đơn</h3>
+    <label>Ngày gửi</label><input id="ctNgayGui" readonly>
+    <label>Người nhận</label><input id="ctNguoiNhan" readonly>
+    <label>Địa chỉ</label><input id="ctDiaChi" readonly>
+    <label>SĐT</label><input id="ctSdt" readonly>
+    <label>Cước phí</label><input id="ctCuocPhi" readonly oninput="dinhDangSo(this)">
+    <label>Nội dung</label><input id="ctNoiDung" readonly>
+    <div style="text-align:right; margin-top:10px;">
+      <button id="btnLuu" onclick="luuChinhSua()" style="display:none; background-color:#28a745; color:white;">Lưu</button>
+      <button id="btnSua" onclick="batChinhSua()">Sửa</button>
+      <button onclick="hienModalXacNhan('don')" style="background-color:#dc3545; color:white;">Xoá</button>
+      <button onclick="dongModal()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal xác nhận -->
+<div id="modalXacNhan" class="modal">
+  <div class="modal-content" style="text-align:center;">
+    <p id="noiDungXacNhan" style="font-size:18px;"></p>
+    <button onclick="thucHienXoa()" style="background-color:#dc3545; color:white;">Xoá</button>
+    <button onclick="dongModalXacNhan()">Huỷ</button>
+  </div>
+</div>
+
+<!-- modal mở khóa -->
+<div id="unlockModal" class="modal">
+  <div class="modal-content" style="text-align:center;">
+    <h3>🔐 Nhập mật khẩu & lý do thay đổi</h3>
+    <input type="password" id="unlockPassword" placeholder="Mật khẩu..." />
+    <input type="text" id="lyDoThayDoi" placeholder="Lý do thay đổi..." style="margin-top:10px;" />
+    <div style="margin-top:15px;">
+      <button onclick="xacNhanMoKhoaTien()">Xác nhận</button>
+      <button onclick="dongUnlockModal()">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal lịch sử thay đổi tiền nhận -->
+<div id="lichSuModal" class="modal">
+  <div class="modal-content modal-lichsu">
+    <h3 class="modal-title">📜 Lịch sử thay đổi tiền nhận</h3>
+    <table class="lichsu-table">
+      <thead>
+        <tr>
+          <th>Thời gian</th>
+          <th>Tiền cũ</th>
+          <th>Tiền mới</th>
+          <th>Lý do</th>
+        </tr>
+      </thead>
+      <tbody id="lichSuTableBody">
+        <!-- dữ liệu sẽ được thêm vào đây -->
+      </tbody>
+    </table>
+    <div class="modal-footer">
+      <button class="btn-xuat-csv" onclick="xuatLichSuJSON()">📤 Xuất CSV</button>
+      <button class="btn-xoa-tatca" onclick="xoaTatCaLichSu()"> Xoá tất cả</button>
+      <button onclick="dongLichSuModal()" class="btn-dong">Đóng</button>
+    </div>
+  </div>
+</div>
+
+
+
+
+<div id="toast" class="toast">Thông báo</div>
+
+
+<script>
+let dsDon = JSON.parse(localStorage.getItem("dsDon")) || [];
+let chiSoHienTai = -1;
+let cheDoXoa = "";
+let ketQuaTimKiem = [];
+let trangHienTai = 1;
+const soDongMoiTrang = 10;
+let tienNhanLucMoKhoa = null;
+let lyDoMoKhoa = ""; // 🆕 lưu lại lý do nhập
+
+function capNhatTongSoTien() {
+  const value = document.getElementById("stn").value;
+  const soTien = parseInt(value.replace(/[^0-9]/g, ""), 10) || 0;
+  localStorage.setItem("soTienNhan", soTien);
+
+  document.getElementById("tongTienNhan").textContent = `Tổng số tiền nhận: ${soTien.toLocaleString()} VND`;
+
+  capNhatTongCuocPhiVaTienConLai(); // gọi hàm tính thêm
+  
+
+}
+function capNhatTongCuocPhiVaTienConLai() {
+  const tongCuoc = ketQuaTimKiem.reduce((sum, don) => sum + (parseInt(don.cuocPhi) || 0), 0);
+  const soTienNhan = parseInt(localStorage.getItem("soTienNhan") || "0", 10);
+  const conLai = soTienNhan - tongCuoc;
+
+ document.getElementById("tongCuocPhi").textContent = `Tổng cước phí: ${tongCuoc.toLocaleString()} VND`;
+  const soTienConLaiEl = document.getElementById("soTienConLai");
+  soTienConLaiEl.textContent = `Số tiền còn lại: ${conLai.toLocaleString()} VND`;
+
+  if (conLai < 0) {
+    soTienConLaiEl.classList.add("so-am");
+  } else {
+    soTienConLaiEl.classList.remove("so-am");
+  }
+}
+
+
+function hienThiBang(data) {
+  const tbody = document.getElementById("bangDon");
+  tbody.innerHTML = "";
+
+  data.forEach((don, index) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${(trangHienTai - 1) * soDongMoiTrang + index + 1}</td>
+      <td>${don.ngayGui}</td>
+      <td>${don.nguoiNhan}</td>
+      <td>${don.diaChi}</td>
+      <td>${don.sdt}</td>
+      <td>${Number(don.cuocPhi).toLocaleString()}</td>
+      <td>${don.noiDung}</td>
+    `;
+
+    row.onclick = () => moModalChiTiet(don); // truyền object
+    tbody.appendChild(row);
+  });
+}
+
+
+function themDon() {
+  const don = {
+    ngayGui: document.getElementById("ngayGui").value.trim(),
+    nguoiNhan: document.getElementById("nguoiNhan").value.trim(),
+    diaChi: document.getElementById("diaChi").value.trim(),
+    sdt: document.getElementById("sdt").value.trim(),
+    cuocPhi: document.getElementById("cuocPhi").value.replace(/\D/g, ""),
+    noiDung: document.getElementById("noiDung").value.trim()
+  };
+
+  if (!don.ngayGui || !don.noiDung ||  !don.cuocPhi) {
+    hienToast("Vui lòng Vui lòng nhập nội dung và cước phí và ngày");
+    return;
+  }
+
+  dsDon.unshift(don);
+  localStorage.setItem("dsDon", JSON.stringify(dsDon));
+  timKiemDon();
+  ["ngayGui","nguoiNhan","diaChi","sdt","cuocPhi","noiDung"].forEach(id => document.getElementById(id).value = "");
+  capNhatTongCuocPhiVaTienConLai();
+  hienToast("✔️ Đã thêm đơn thành công!");
+
+}
+
+function timKiemDon() {
+  const kw = document.getElementById("searchInput").value.toLowerCase();
+  const startDateStr = document.getElementById("startDate").value;
+  const endDateStr = document.getElementById("endDate").value;
+
+  const startDate = startDateStr ? chuyenNgayVNVeDate(startDateStr) : null;
+  const endDate = endDateStr ? chuyenNgayVNVeDate(endDateStr) : null;
+
+
+  localStorage.setItem("boLoc", JSON.stringify({
+    keyword: kw,
+    startDate: startDateStr,
+    endDate: endDateStr
+  }));    
+
+  ketQuaTimKiem = dsDon
+    .slice()
+    .sort((a, b) => {
+    const dateA = chuyenNgayVNVeDate(a.ngayGui);
+    const dateB = chuyenNgayVNVeDate(b.ngayGui);
+    return dateB - dateA; // mới → cũ
+    })
+    .filter(d => {
+      const ngayDon = chuyenNgayVNVeDate(d.ngayGui);
+
+      const textMatch =
+        (d.nguoiNhan || "").toLowerCase().includes(kw) ||
+        (d.diaChi || "").toLowerCase().includes(kw) ||
+        (d.sdt || "").toLowerCase().includes(kw) ||
+        (d.noiDung || "").toLowerCase().includes(kw)||
+        (d.ngayGui || "").toLowerCase().includes(kw) ||
+        (d.cuocPhi || "").toLowerCase().includes(kw);
+
+      const dateMatch =
+        (!startDate || (ngayDon && ngayDon >= startDate)) &&
+        (!endDate || (ngayDon && ngayDon <= endDate));
+
+      return textMatch && dateMatch;
+    });
+
+  trangHienTai = 1;
+  hienThiTrang();
+  capNhatTongSoDon();
+}
+
+
+
+function chuyenNgayVNVeDate(ngayVN) {
+  const [dd, mm, yyyy] = ngayVN.split("/").map(x => parseInt(x, 10));
+  return new Date(yyyy, mm - 1, dd); // Tháng trong JS bắt đầu từ 0
+}
+
+
+function xoaLocNgay() {
+  document.getElementById("startDate").value = "";
+  document.getElementById("endDate").value = "";
+  timKiemDon();
+  
+}
+
+function chuanHoaNgay(chuoi) {
+  const parts = chuoi.split("/");
+  if (parts.length !== 3) return new Date("Invalid Date");
+  const [day, month, year] = parts;
+  return new Date(`${year}-${month}-${day}`);
+}
+
+
+function hienThiTrang() {
+  const batDau = (trangHienTai - 1) * soDongMoiTrang;
+  const ketThuc = batDau + soDongMoiTrang;
+  const duLieuTrang = ketQuaTimKiem.slice(batDau, ketThuc);
+  hienThiBang(duLieuTrang);
+  capNhatTongSoDon();
+  const tongTrang = Math.ceil(ketQuaTimKiem.length / soDongMoiTrang);
+  document.getElementById("thongTinTrang").textContent = `Trang ${trangHienTai} / ${tongTrang}`;
+  capNhatTongCuocPhiVaTienConLai();
+
+}
+
+function chuyenTrang(huong) {
+  const tongTrang = Math.ceil(ketQuaTimKiem.length / soDongMoiTrang);
+  if ((huong === -1 && trangHienTai > 1) || (huong === 1 && trangHienTai < tongTrang)) {
+    trangHienTai += huong;
+    hienThiTrang();
+  }
+}
+
+function moModalChiTiet(don) {
+  ["NgayGui","NguoiNhan","DiaChi","Sdt","CuocPhi","NoiDung"].forEach(f => {
+  const input = document.getElementById("ct" + f);
+  let val = don[f.charAt(0).toLowerCase() + f.slice(1)];
+
+  // 👉 Định dạng riêng cho cước phí
+  if (f === "CuocPhi") {
+    val = Number(val || 0).toLocaleString("vi-VN") ;
+  }
+
+  input.value = val;
+  input.setAttribute("readonly", true);
+  input.classList.add("readonly-field");
+});
+
+
+  // tìm đúng chỉ số trong dsDon để sửa/xoá sau này
+  chiSoHienTai = dsDon.findIndex(d =>
+    d.ngayGui === don.ngayGui &&
+    d.nguoiNhan === don.nguoiNhan &&
+    d.diaChi === don.diaChi &&
+    d.sdt === don.sdt &&
+    d.cuocPhi === don.cuocPhi &&
+    d.noiDung === don.noiDung
+  );
+
+  document.getElementById("btnSua").style.display = "inline-block";
+  document.getElementById("btnLuu").style.display = "none";
+  document.getElementById("chiTietModal").style.display = "flex";
+}
+
+
+function dongModal() {
+  document.getElementById("chiTietModal").style.display = "none";
+  chiSoHienTai = -1;
+}
+
+function batChinhSua() {
+  ["ctNgayGui", "ctNguoiNhan", "ctDiaChi", "ctSdt", "ctCuocPhi", "ctNoiDung"].forEach(id => {
+    const input = document.getElementById(id);
+    input.removeAttribute("readonly");
+    input.classList.remove("readonly-field");
+
+    // ✅ Định dạng lại cước phí khi chuyển sang chế độ sửa
+    if (id === "ctCuocPhi") {
+      const raw = input.value.replace(/[^\d]/g, "");
+      input.value = Number(raw).toLocaleString("vi-VN");
+    }
+  });
+
+  document.getElementById("btnSua").style.display = "none";
+  document.getElementById("btnLuu").style.display = "inline-block";
+}
+
+
+function luuChinhSua() {
+  if (chiSoHienTai < 0) return;
+
+  // ⚠️ Làm sạch cước phí trước khi lưu
+  const rawCuocPhi = document.getElementById("ctCuocPhi").value.replace(/[^\d]/g, "");
+
+  const capNhat = {
+    ngayGui: document.getElementById("ctNgayGui").value.trim(),
+    nguoiNhan: document.getElementById("ctNguoiNhan").value.trim(),
+    diaChi: document.getElementById("ctDiaChi").value.trim(),
+    sdt: document.getElementById("ctSdt").value.trim(),
+    cuocPhi: rawCuocPhi,
+    noiDung: document.getElementById("ctNoiDung").value.trim()
+  };
+
+  if (!capNhat.ngayGui || !capNhat.noiDung  || !capNhat.cuocPhi) {
+    hienToast("Vui lòng nhập đầy đủ thông tin trước khi lưu!");
+    return;
+  }
+
+  // Lưu lại
+  dsDon[chiSoHienTai] = capNhat;
+  localStorage.setItem("dsDon", JSON.stringify(dsDon));
+  timKiemDon();
+  capNhatTongCuocPhiVaTienConLai();
+
+  // Reset lại readonly
+  ["ctNgayGui", "ctNguoiNhan", "ctDiaChi", "ctSdt", "ctCuocPhi", "ctNoiDung"].forEach(id => {
+    const input = document.getElementById(id);
+    input.setAttribute("readonly", true);
+    input.classList.add("readonly-field");
+  });
+
+  document.getElementById("btnLuu").style.display = "none";
+  document.getElementById("btnSua").style.display = "inline-block";
+}
+
+
+
+
+
+function hienModalXacNhan(loai) {
+  cheDoXoa = loai;
+  document.getElementById("noiDungXacNhan").textContent =
+    loai === "don" ? "Bạn có chắc chắn muốn xoá đơn này?" : "Bạn có chắc chắn muốn xoá toàn bộ dữ liệu?";
+  document.getElementById("modalXacNhan").style.display = "flex";
+}
+
+function dongModalXacNhan() {
+  document.getElementById("modalXacNhan").style.display = "none";
+}
+
+function thucHienXoa() {
+  if (cheDoXoa === "don" && chiSoHienTai >= 0) {
+    dsDon.splice(chiSoHienTai, 1);
+    hienToast("🗑️ Đã xoá đơn!");
+  } else if (cheDoXoa === "tatca") {
+    // 🔁 Backup trước khi xoá
+    const dataBackup = localStorage.getItem("dsDon");
+    if (dataBackup) {
+      const blob = new Blob([dataBackup], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "backup_don_grab_be.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      hienToast("💾 Đã lưu bản backup trước khi xoá!", "#ffc107");
+    }
+
+    // 🧹 Xoá toàn bộ
+    dsDon = [];
+  }
+
+  localStorage.setItem("dsDon", JSON.stringify(dsDon));
+  timKiemDon();
+  dongModal();
+  dongModalXacNhan();
+  cheDoXoa = "";
+  capNhatTongCuocPhiVaTienConLai();
+}
+
+
+
+
+function capNhatTongSoTien() {
+  const value = document.getElementById("stn").value;
+  const soTien = parseInt(value.replace(/[^0-9]/g, ""), 10) || 0;
+  localStorage.setItem("soTienNhan", soTien);
+  document.getElementById("tongTienNhan").textContent = `Tổng số tiền nhận: ${soTien.toLocaleString()} đ`;
+  capNhatTongCuocPhiVaTienConLai(); // gọi hàm tính thêm
+}
+
+window.onload = () => {
+  ketQuaTimKiem = dsDon;
+
+  // ✅ Load số tiền nhận từ localStorage
+  const tienNhan = parseInt(localStorage.getItem("soTienNhan") || "0", 10);
+  const stnInput = document.getElementById("stn");
+  stnInput.value = tienNhan.toLocaleString("vi-VN");
+
+  // 🛠️ Gắn định dạng khi nhập
+  stnInput.removeEventListener("input", stnInput._dinhDang);
+  stnInput._dinhDang = () => dinhDangSoTienNhan(stnInput);
+  stnInput.addEventListener("input", stnInput._dinhDang);
+
+  // ✅ Hiển thị tổng
+  document.getElementById("tongTienNhan").textContent = `Tổng số tiền nhận: ${tienNhan.toLocaleString()} VND`;
+
+  // ✅ Khôi phục bộ lọc nếu có
+  const boLoc = JSON.parse(localStorage.getItem("boLoc") || "{}");
+  if (boLoc.keyword !== undefined) document.getElementById("searchInput").value = boLoc.keyword;
+  if (boLoc.startDate) document.getElementById("startDate").value = boLoc.startDate;
+  if (boLoc.endDate) document.getElementById("endDate").value = boLoc.endDate;
+
+  // ✅ Gọi lại tìm kiếm với bộ lọc đã khôi phục
+  timKiemDon();
+  capNhatTongCuocPhiVaTienConLai();
+};
+
+
+
+
+let daMoKhoaTienNhan = false;
+function moKhoa() {
+  const stnInput = document.getElementById("stn");
+
+  if (!daMoKhoaTienNhan) {
+    // Đang bị khoá → mở khoá
+    document.getElementById("unlockModal").style.display = "flex";
+    document.getElementById("unlockPassword").value = "";
+    document.getElementById("lyDoThayDoi").value = "";
+  } else {
+    // Đang mở → BẤM LẠI để khoá lại
+
+    // 🔹 Lấy số tiền mới sau khi người dùng đã sửa
+    const tienMoi = parseInt((stnInput.value || "0").replace(/\D/g, ""), 10) || 0;
+
+    // Nếu có thay đổi so với lúc mở
+    if (tienMoi !== tienNhanLucMoKhoa) {
+      const lichSu = JSON.parse(localStorage.getItem("lichSuTienNhan") || "[]");
+      lichSu.unshift({
+        thoiGian: new Date().toLocaleString("vi-VN"),
+        tienCu: tienNhanLucMoKhoa,
+        tienMoi: tienMoi,
+        lyDo: lyDoMoKhoa || "Không rõ lý do",
+      });
+      localStorage.setItem("lichSuTienNhan", JSON.stringify(lichSu));
+    }
+
+    // ✅ Lưu tiền mới
+    localStorage.setItem("soTienNhan", tienMoi);
+    document.getElementById("tongTienNhan").textContent = `Tổng số tiền nhận: ${tienMoi.toLocaleString()} VND`;
+    capNhatTongCuocPhiVaTienConLai();
+
+    // Khoá lại input
+    stnInput.setAttribute("readonly", true);
+    stnInput.classList.add("readonly-field");
+    document.getElementById("lockIcon").textContent = "🔒";
+
+    daMoKhoaTienNhan = false;
+    tienNhanLucMoKhoa = null;
+  }
+}
+
+
+
+function dongUnlockModal() {
+  document.getElementById("unlockModal").style.display = "none";
+  document.getElementById("unlockPassword").value = "";
+  document.getElementById("lyDoThayDoi").value = "";
+}
+
+
+function kiemTraMatKhau() {
+  const pass = document.getElementById("unlockPassword").value;
+  if (pass === "78945607") {
+    daMoKhoaTienNhan = true;
+    const stnInput = document.getElementById("stn");
+    stnInput.removeAttribute("readonly");
+    stnInput.classList.remove("readonly-field");
+    document.getElementById("lockIcon").textContent = "🔓";
+
+    // Gắn định dạng mỗi lần nhập
+    stnInput.removeEventListener("input", stnInput._dinhDang);
+    stnInput._dinhDang = () => dinhDangSoTienNhan(stnInput);
+    stnInput.addEventListener("input", stnInput._dinhDang);
+
+    dongUnlockModal();
+  } else {
+    hienToast("Sai mật khẩu!");
+  }
+}
+
+function nhapFileJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data)) {
+        const existingSet = new Set(dsDon.map(d => JSON.stringify(d)));
+        const newData = data.filter(d => !existingSet.has(JSON.stringify(d)));
+
+        if (newData.length === 0) {
+          hienToast("ℹ️ Dữ liệu đã tồn tại, không có đơn mới.");
+          return;
+        }
+
+        dsDon = [...newData, ...dsDon]; // thêm lên đầu
+        localStorage.setItem("dsDon", JSON.stringify(dsDon));
+        hienToast(`📥 Đã thêm ${newData.length} đơn từ JSON.`);
+        timKiemDon();
+      } else {
+        hienToast("❌ Dữ liệu JSON không hợp lệ.");
+      }
+    } catch (err) {
+      hienToast("❌ Lỗi khi đọc file JSON.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+
+
+function xuatFileJson() {
+  const blob = new Blob([JSON.stringify(dsDon, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "don_grab_be.json";
+  a.click();
+  URL.revokeObjectURL(url);
+  hienToast("📤 Xuất JSON thành công!");
+
+}
+// thông báo
+function hienToast(message, color = "#28a745") {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.style.backgroundColor = color;
+  toast.classList.add("show");
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 3000);
+}
+</script>
+<script>
+  flatpickr("#startDate", {
+  dateFormat: "d/m/Y",
+  allowInput: true
+});
+flatpickr("#endDate", {
+  dateFormat: "d/m/Y",
+  allowInput: true
+});
+flatpickr("#ngayGui", {
+  dateFormat: "d/m/Y",
+  allowInput: true
+});
+function dinhDangCuocPhi(input) {
+  // Lưu lại vị trí con trỏ
+  const cursorPos = input.selectionStart;
+  const oldLength = input.value.length;
+
+  // Xoá dấu chấm/ngăn cách nếu có
+  let rawValue = input.value.replace(/\D/g, ""); // chỉ giữ số
+
+  // Format lại
+  if (rawValue) {
+    input.value = parseInt(rawValue, 10).toLocaleString("vi-VN");
+  } else {
+    input.value = "";
+  }
+
+  // Cập nhật lại vị trí con trỏ (để không bị nhảy lung tung)
+  const newLength = input.value.length;
+  const newPos = cursorPos + (newLength - oldLength);
+  input.setSelectionRange(newPos, newPos);
+}
+function dinhDangSoTienNhan(input) {
+  // Ghi nhớ vị trí con trỏ (tuỳ chọn)
+  const selectionStart = input.selectionStart;
+
+  // Lấy giá trị số thuần
+  const rawValue = input.value.replace(/\D/g, "");
+  if (!rawValue) {
+    input.value = "";
+    return;
+  }
+
+  // ✅ Cập nhật input hiển thị
+  const tienMoi = parseInt(rawValue, 10);
+  input.value = tienMoi.toLocaleString("vi-VN");
+
+  // Không ghi vào localStorage ở đây nữa ❌
+  // Không cập nhật tổng ở đây ❌
+
+  // Đưa con trỏ về cuối (tuỳ chọn)
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+
+function dinhDangSo(input) {
+  let value = input.value.replace(/\D/g, "");
+  if (value) input.value = Number(value).toLocaleString("vi-VN");
+}
+function capNhatTongSoDon() {
+  document.getElementById("thongKeDon").textContent = `Tổng số đơn hàng: ${ketQuaTimKiem.length}`;
+}
+
+function xacNhanMoKhoaTien() {
+  const pass = document.getElementById("unlockPassword").value;
+  const lyDo = document.getElementById("lyDoThayDoi").value.trim();
+
+  if (pass !== "78945607") return hienToast("❌ Sai mật khẩu!");
+  if (!lyDo) return hienToast("⚠️ Vui lòng nhập lý do!");
+
+  daMoKhoaTienNhan = true;
+  lyDoMoKhoa = lyDo;
+
+  const stnInput = document.getElementById("stn");
+  stnInput.removeAttribute("readonly");
+  stnInput.classList.remove("readonly-field");
+  document.getElementById("lockIcon").textContent = "🔓";
+
+  // 🔹 Ghi nhớ số tiền cũ tại thời điểm mở khoá
+  tienNhanLucMoKhoa = parseInt((stnInput.value || "0").replace(/\D/g, ""), 10) || 0;
+
+  dongUnlockModal();
+  hienToast("✅ Đã mở khoá tiền nhận!");
+}
+
+
+function moLichSuModal() {
+  const lichSu = JSON.parse(localStorage.getItem("lichSuTienNhan") || "[]");
+  const tbody = document.getElementById("lichSuTableBody");
+  tbody.innerHTML = "";
+
+  if (lichSu.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Chưa có lịch sử thay đổi</td></tr>`;
+  } else {
+    lichSu.forEach(item => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${item.thoiGian}</td>
+        <td>${(item.tienCu || 0).toLocaleString("vi-VN")} đ</td>
+        <td>${item.tienMoi !== null ? Number(item.tienMoi).toLocaleString("vi-VN") + " đ" : "-"}</td>
+        <td>${item.lyDo}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById("lichSuModal").style.display = "flex";
+}
+function dongLichSuModal() {
+  document.getElementById("lichSuModal").style.display = "none";
+}
+
+function xoaTatCaLichSu() {
+  if (confirm("Bạn có chắc chắn muốn xoá toàn bộ lịch sử thay đổi tiền nhận không?")) {
+    // Xoá dữ liệu
+    localStorage.removeItem("lichSuTienNhan");
+
+    // Xoá nội dung bảng thủ công
+    const tbody = document.getElementById("lichSuTableBody");
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Chưa có lịch sử thay đổi</td></tr>`;
+
+    // Đóng modal
+    document.getElementById("lichSuModal").style.display = "none";
+
+    // Thông báo
+    hienToast("🗑️ Đã xoá toàn bộ lịch sử!");
+  }
+}
+function xuatLichSuJSON() {
+  const lichSu = JSON.parse(localStorage.getItem("lichSuTienNhan") || "[]");
+  if (lichSu.length === 0) return hienToast("📂 Không có lịch sử để xuất!");
+
+  // Chuyển thành JSON
+  const jsonData = JSON.stringify(lichSu, null, 2);
+
+  const blob = new Blob([jsonData], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "lich_su_tien_nhan.json"; // Đổi sang .json
+  a.click();
+  URL.revokeObjectURL(url);
+
+  hienToast("📤 Đã xuất lịch sử tiền nhận (JSON)!");
+}
+
+
+
+
+</script>
+</body>
+</html>
