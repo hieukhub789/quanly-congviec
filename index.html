@@ -2672,5 +2672,161 @@ function showSystemNotification(title, message, type = "info") {
   }
 }
 </script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB3YYnW0BElIeoRW-pBAWrSyo74QE1-64I",
+    authDomain: "hieu1-24be7.firebaseapp.com",
+    databaseURL: "https://hieu1-24be7-default-rtdb.firebaseio.com",
+    projectId: "hieu1-24be7",
+    storageBucket: "hieu1-24be7.firebasestorage.app",
+    messagingSenderId: "350859931788",
+    appId: "1:350859931788:web:945d67c77d5cd2906c4ba9",
+    measurementId: "G-VGP7L1QFX7"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  function showFirebaseToast(message, isError=false) {
+    const toast = document.createElement("div");
+    toast.textContent = message;
+    toast.style.position = "fixed";
+    toast.style.bottom = "24px";
+    toast.style.right = "24px";
+    toast.style.background = isError ? "#e74c3c" : "#2c7be5";
+    toast.style.color = "#fff";
+    toast.style.padding = "10px 16px";
+    toast.style.borderRadius = "10px";
+    toast.style.fontSize = "14px";
+    toast.style.zIndex = "99999";
+    toast.style.boxShadow = "0 6px 18px rgba(0,0,0,0.15)";
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 300ms ease, transform 300ms ease";
+    toast.style.transform = "translateY(8px)";
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.style.opacity = "1";
+      toast.style.transform = "translateY(0)";
+    });
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(8px)";
+      setTimeout(() => toast.remove(), 300);
+    }, 2500);
+  }
+
+  // Override saveToLocalStorage to implement dual storage (local + Firebase). This keeps compatibility.
+  window.saveToLocalStorage = async function() {
+    try {
+      if (typeof currentUser === "undefined" || !currentUser || currentUser === "all") {
+        console.warn("Không lưu: currentUser chưa xác định hoặc là 'all'");
+        return;
+      }
+      const dataToSave = Array.isArray(window.tasks) ? window.tasks : [];
+
+      // 1) Local
+      localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(dataToSave));
+
+      // 2) Firebase
+      try {
+        await set(ref(db, `tasks/${currentUser}`), dataToSave);
+        console.log(`Firebase: synced tasks/${currentUser}`);
+        // show only success toasts per user's choice
+        showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
+      } catch (err) {
+        console.warn("Firebase set error:", err);
+        // do not show error toast per user's choice "chỉ thành công"
+      }
+    } catch (err) {
+      console.error("Lỗi saveToLocalStorage (dual):", err);
+    }
+  };
+
+  // Override loadUserTasks: local-first, then cloud sync if available
+  window.loadUserTasks = async function() {
+    try {
+      if (typeof currentUser === "undefined" || !currentUser) {
+        console.warn("Không thể load: currentUser chưa xác định");
+        window.tasks = [];
+        if (typeof filterTasks === "function") filterTasks();
+        return;
+      }
+
+      // 1) Read local first
+      const localRaw = localStorage.getItem(`tasks_${currentUser}`);
+      let localData = [];
+      try {
+        localData = localRaw ? JSON.parse(localRaw) : [];
+      } catch (err) {
+        console.warn("Local parse error, reset to []", err);
+        localData = [];
+      }
+      window.tasks = Array.isArray(localData) ? localData : [];
+      if (typeof filterTasks === "function") filterTasks();
+
+      // 2) Then try cloud
+      try {
+        const snapshot = await get(ref(db, `tasks/${currentUser}`));
+        if (snapshot.exists()) {
+          const cloudData = snapshot.val();
+          const finalData = Array.isArray(cloudData) ? cloudData : cloudData;
+          const cloudJson = JSON.stringify(finalData || []);
+          const localJson = JSON.stringify(window.tasks || []);
+          if (cloudJson !== localJson) {
+            localStorage.setItem(`tasks_${currentUser}`, cloudJson);
+            window.tasks = Array.isArray(finalData) ? finalData : finalData;
+            console.log(`Firebase: loaded tasks/${currentUser}`);
+            showFirebaseToast(`☁️ Đã tải dữ liệu Firebase cho ${currentUser}`);
+            if (typeof filterTasks === "function") filterTasks();
+          } else {
+            console.log("Firebase data same as local — không cần cập nhật UI.");
+          }
+        } else {
+          console.log("No cloud data for", currentUser);
+        }
+      } catch (err) {
+        console.warn("Firebase get error:", err);
+      }
+    } catch (err) {
+      console.error("Lỗi loadUserTasks (dual):", err);
+      window.tasks = window.tasks || [];
+      if (typeof filterTasks === "function") filterTasks();
+    }
+  };
+
+  window.syncNowToFirebase = async function() {
+    if (typeof saveToLocalStorage === "function") {
+      await saveToLocalStorage();
+    }
+  };
+
+  window.addEventListener("load", async () => {
+    try {
+      if (!window.currentUser) {
+        const saved = localStorage.getItem("currentUser");
+        if (saved) {
+          window.currentUser = saved;
+          const sel = document.getElementById("userSelect");
+          if (sel) sel.value = saved;
+        }
+      }
+      if (typeof loadUserTasks === "function") {
+        await loadUserTasks();
+      }
+    } catch (err) {
+      console.warn("Error during initial dual-load:", err);
+    }
+  });
+
+  window.addEventListener("online", () => {
+    console.log("Navigator: online — thử sync");
+    if (typeof syncNowToFirebase === "function") syncNowToFirebase();
+  });
+</script>
+
 </body>
 </html>
