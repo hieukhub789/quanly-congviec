@@ -633,8 +633,11 @@
 
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr">
+    import { set, getDatabase, ref, remove } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  </script>
 </head>
 <body>
   <h2 style="text-align: center; color: #2c3e50;">Ứng dụng Quản lý Công việc Cá nhân và Nhóm</h2>
@@ -2373,6 +2376,9 @@ async function changeUser() {
 
   currentUser = select.value;
   localStorage.setItem("currentUser", currentUser);
+
+  // ✅ Reset dữ liệu tạm của user cũ
+  window.tasks = [];
   currentPage = 1;
   updateUIForUser();
 
@@ -2716,32 +2722,48 @@ function showSystemNotification(title, message, type = "info") {
     }, 2500);
   }
 
-  // Override saveToLocalStorage to implement dual storage (local + Firebase). This keeps compatibility.
-  window.saveToLocalStorage = async function() {
-    try {
-      if (typeof currentUser === "undefined" || !currentUser || currentUser === "all") {
-        console.warn("Không lưu: currentUser chưa xác định hoặc là 'all'");
-        return;
-      }
-      const dataToSave = Array.isArray(window.tasks) ? window.tasks : [];
-
-      // 1) Local
-      localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(dataToSave));
-
-      // 2) Firebase
-      try {
-        await set(ref(db, `tasks/${currentUser}`), dataToSave);
-        console.log(`Firebase: synced tasks/${currentUser}`);
-        // show only success toasts per user's choice
-        showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
-      } catch (err) {
-        console.warn("Firebase set error:", err);
-        // do not show error toast per user's choice "chỉ thành công"
-      }
-    } catch (err) {
-      console.error("Lỗi saveToLocalStorage (dual):", err);
+window.saveToLocalStorage = async function() {
+  try {
+    // 🔹 Bảo vệ: Không lưu khi chưa chọn user
+    if (typeof currentUser === "undefined" || !currentUser || currentUser === "all") {
+      console.warn("Không lưu: currentUser chưa xác định hoặc là 'all'");
+      return;
     }
-  };
+
+    // 🔹 Đảm bảo không bị lẫn dữ liệu user cũ
+    if (!Array.isArray(window.tasks)) window.tasks = [];
+    const dataToSave = [...window.tasks]; // clone mảng hiện tại
+
+    // 1️⃣ Lưu localStorage
+    localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(dataToSave));
+
+    // 2️⃣ Lưu Firebase
+    try {
+      const userRef = ref(db, `tasks/${currentUser}`);
+
+      if (dataToSave.length === 0) {
+        // ✅ Nếu mảng trống thì xoá hoàn toàn node của user
+        await remove(userRef);
+        console.log(`Firebase: removed tasks/${currentUser}`);
+        showFirebaseToast(`🗑️ Đã xoá dữ liệu Firebase của ${currentUser}`);
+      } else {
+        // ✅ Nếu có dữ liệu thì ghi đè lên node đó
+        await set(userRef, dataToSave);
+        console.log(`Firebase: synced tasks/${currentUser}`);
+        showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
+      }
+
+    } catch (err) {
+      console.warn("Firebase set/remove error:", err);
+      // không cần show lỗi vì bạn chọn "chỉ hiện khi thành công"
+    }
+
+  } catch (err) {
+    console.error("Lỗi saveToLocalStorage (dual):", err);
+  }
+};
+
+  
 
   // Override loadUserTasks: local-first, then cloud sync if available
   window.loadUserTasks = async function() {
