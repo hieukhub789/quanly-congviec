@@ -2584,31 +2584,49 @@ function addNewUser() {
 }
 
 
-// Xóa người dùng hiện tại
-function deleteCurrentUser() {
-  if (currentUser === "all") {
-  showToast("⚠️ Không thể xóa người dùng 'Tất cả' vì đây là chế độ tổng hợp dữ liệu!");
-  return;
+async function deleteCurrentUser() {
+  if (!currentUser || currentUser === "all") {
+    if (typeof showToast === "function") showToast("❌ Không thể xóa người dùng mặc định 'Tất cả'!");
+    return;
   }
 
-  if (!confirm(`Bạn có chắc muốn xóa người dùng "${currentUser}" và toàn bộ dữ liệu của họ không?`))
-    return;
+  const confirmDelete = confirm(`⚠️ Bạn có chắc muốn xoá toàn bộ dữ liệu của người dùng "${currentUser}" không?\nHành động này không thể hoàn tác!`);
+  if (!confirmDelete) return;
 
-  let users = JSON.parse(localStorage.getItem("users")) || [];
-  users = users.filter(u => u !== currentUser);
-  localStorage.setItem("users", JSON.stringify(users));
+  try {
+    const removedUser = currentUser;
 
-  localStorage.removeItem(`tasks_${currentUser}`);
+    // 🧹 Xoá dữ liệu của user
+    localStorage.removeItem(`tasks_${removedUser}`);
+    await db.ref(`tasks/${removedUser}`).remove();
+    console.log(`Firebase: removed tasks/${removedUser}`);
 
-  showToast(`🗑️ Đã xóa người dùng: ${currentUser}`);
+    // 🧩 Xoá user khỏi danh sách lưu trữ userList (nếu có)
+    let users = JSON.parse(localStorage.getItem("userList") || "[]");
+    users = users.filter(u => u !== removedUser);
+    localStorage.setItem("userList", JSON.stringify(users));
 
-  currentUser = "all";
-  localStorage.setItem("currentUser", currentUser);
+    // 🧭 Cập nhật giao diện dropdown
+    const select = document.getElementById("userSelect");
+    if (select) {
+      const option = [...select.options].find(opt => opt.value === removedUser);
+      if (option) option.remove();
+      currentUser = "all";
+      select.value = "all";
+      localStorage.setItem("currentUser", "all");
+    }
 
-  closeModal("addUserModal");
-  loadUsers();
-  changeUser();
+    // 🧩 Làm trống danh sách task
+    window.tasks = [];
+    if (typeof filterTasks === "function") filterTasks();
+
+    if (typeof showFirebaseToast === "function") showFirebaseToast(`🗑️ Đã xoá người dùng "${removedUser}" và toàn bộ dữ liệu.`);
+  } catch (err) {
+    console.error("Lỗi khi xoá người dùng (compat):", err);
+    if (typeof showToast === "function") showToast("❌ Lỗi khi xoá người dùng, vui lòng thử lại!");
+  }
 }
+
 
 // --- Gọi khi load trang ---
 document.addEventListener("DOMContentLoaded", loadUsers);
