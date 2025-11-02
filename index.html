@@ -2585,48 +2585,30 @@ function addNewUser() {
 
 
 // Xóa người dùng hiện tại
-async function deleteCurrentUser() {
-  if (!currentUser || currentUser === "all") {
-    showToast("❌ Không thể xóa người dùng mặc định 'Tất cả'!");
+function deleteCurrentUser() {
+  if (currentUser === "all") {
+  showToast("⚠️ Không thể xóa người dùng 'Tất cả' vì đây là chế độ tổng hợp dữ liệu!");
+  return;
+  }
+
+  if (!confirm(`Bạn có chắc muốn xóa người dùng "${currentUser}" và toàn bộ dữ liệu của họ không?`))
     return;
-  }
 
-  const confirmDelete = confirm(`⚠️ Bạn có chắc muốn xoá toàn bộ dữ liệu của người dùng "${currentUser}" không?\nHành động này không thể hoàn tác!`);
-  if (!confirmDelete) return;
+  let users = JSON.parse(localStorage.getItem("users")) || [];
+  users = users.filter(u => u !== currentUser);
+  localStorage.setItem("users", JSON.stringify(users));
 
-  try {
-    // 🧹 1️⃣ Xoá dữ liệu trong localStorage
-    localStorage.removeItem(`tasks_${currentUser}`);
+  localStorage.removeItem(`tasks_${currentUser}`);
 
-    // ☁️ 2️⃣ Xoá dữ liệu trong Firebase
-    const userRef = ref(db, `tasks/${currentUser}`);
-    await remove(userRef);
-    console.log(`Firebase: removed tasks/${currentUser}`);
+  showToast(`🗑️ Đã xóa người dùng: ${currentUser}`);
 
-    // 🔄 3️⃣ Xoá user khỏi danh sách <select>
-    const select = document.getElementById("userSelect");
-    if (select) {
-      const optionToRemove = [...select.options].find(opt => opt.value === currentUser);
-      if (optionToRemove) optionToRemove.remove();
+  currentUser = "all";
+  localStorage.setItem("currentUser", currentUser);
 
-      // Chuyển về "all"
-      currentUser = "all";
-      select.value = "all";
-      localStorage.setItem("currentUser", "all");
-    }
-
-    // 🧩 4️⃣ Làm trống dữ liệu hiển thị
-    window.tasks = [];
-    if (typeof filterTasks === "function") filterTasks();
-
-    showFirebaseToast(`🗑️ Đã xoá người dùng "${currentUser}" và toàn bộ dữ liệu liên quan.`);
-
-  } catch (err) {
-    console.error("Lỗi khi xoá người dùng:", err);
-    showToast("❌ Lỗi khi xoá người dùng, vui lòng thử lại!");
-  }
+  closeModal("addUserModal");
+  loadUsers();
+  changeUser();
 }
-
 
 // --- Gọi khi load trang ---
 document.addEventListener("DOMContentLoaded", loadUsers);
@@ -2863,6 +2845,146 @@ window.saveToLocalStorage = async function() {
     console.log("Navigator: online — thử sync");
     if (typeof syncNowToFirebase === "function") syncNowToFirebase();
   });
+</script>
+
+
+<script>
+// --- Dual-storage final overrides (appended) ---
+
+// Ensure remove is available (if not using module imports earlier)
+async function _ensureRemoveAvailable() {
+  // noop - remove should be available from module import; if not, delete on cloud won't work
+}
+
+// saveToLocalStorage: saves local then syncs to Firebase; removes Firebase node if empty
+window.saveToLocalStorage = async function() {
+  try {
+    if (typeof currentUser === "undefined" || !currentUser || currentUser === "all") {
+      console.warn("Không lưu: currentUser chưa xác định hoặc là 'all'");
+      return;
+    }
+    if (!Array.isArray(window.tasks)) window.tasks = [];
+    const dataToSave = JSON.parse(JSON.stringify(window.tasks));
+
+    // save local
+    localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(dataToSave));
+
+    // sync to firebase
+    try {
+      const userRef = ref(db, `tasks/${currentUser}`);
+      if (dataToSave.length === 0) {
+        try {
+          await remove(userRef);
+          console.log(`Firebase: removed tasks/${currentUser}`);
+          if (typeof showFirebaseToast === "function") showFirebaseToast(`🗑️ Đã xoá dữ liệu Firebase của ${currentUser}`);
+        } catch (e) {
+          console.warn("Firebase remove error:", e);
+        }
+      } else {
+        try {
+          await set(userRef, dataToSave);
+          console.log(`Firebase: synced tasks/${currentUser}`);
+          if (typeof showFirebaseToast === "function") showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
+        } catch (e) {
+          console.warn("Firebase set error:", e);
+        }
+      }
+    } catch (e) {
+      console.warn("Firebase ref error:", e);
+    }
+  } catch (err) {
+    console.error("Lỗi saveToLocalStorage (final):", err);
+  }
+};
+
+// loadUserTasks: local-first, then cloud; avoid leaking previous user's tasks
+window.loadUserTasks = async function() {
+  try {
+    if (!currentUser || currentUser === "all") {
+      window.tasks = [];
+      if (typeof filterTasks === "function") filterTasks();
+      return;
+    }
+
+    // read local
+    const localRaw = localStorage.getItem(`tasks_${currentUser}`);
+    let localData = [];
+    try {
+      localData = localRaw ? JSON.parse(localRaw) : [];
+    } catch (e) {
+      localData = [];
+    }
+    window.tasks = Array.isArray(localData) ? localData : [];
+    if (typeof filterTasks === "function") filterTasks();
+
+    // read cloud
+    try {
+      const snapshot = await get(ref(db, `tasks/${currentUser}`));
+      if (snapshot.exists()) {
+        const cloudData = snapshot.val();
+        const cloudArr = Array.isArray(cloudData) ? cloudData : cloudData;
+        if (JSON.stringify(cloudArr) !== JSON.stringify(window.tasks)) {
+          window.tasks = Array.isArray(cloudArr) ? cloudArr : [];
+          localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(window.tasks));
+          console.log(`Firebase: loaded tasks/${currentUser}`);
+          if (typeof filterTasks === "function") filterTasks();
+          if (typeof showFirebaseToast === "function") showFirebaseToast(`☁️ Đã tải dữ liệu Firebase cho ${currentUser}`);
+        }
+      } else {
+        // no cloud data; if local empty keep empty
+        if (!localRaw) {
+          window.tasks = [];
+          localStorage.removeItem(`tasks_${currentUser}`);
+          if (typeof filterTasks === "function") filterTasks();
+        }
+        console.log(`Firebase: no data for ${currentUser}`);
+      }
+    } catch (e) {
+      console.warn("Firebase get error:", e);
+    }
+
+  } catch (err) {
+    console.error("Lỗi loadUserTasks (final):", err);
+  }
+};
+
+// deleteCurrentUser: remove local, remove firebase node, remove option and switch to 'all'
+async function deleteCurrentUser() {
+  if (!currentUser || currentUser === "all") {
+    if (typeof showToast === "function") showToast("❌ Không thể xóa người dùng mặc định 'Tất cả'!");
+    return;
+  }
+  const confirmDelete = confirm(`⚠️ Bạn có chắc muốn xoá toàn bộ dữ liệu của người dùng "${currentUser}" không?\nHành động này không thể hoàn tác!`);
+  if (!confirmDelete) return;
+  try {
+    const removedUser = currentUser;
+    // remove local
+    localStorage.removeItem(`tasks_${removedUser}`);
+    // remove on firebase
+    try {
+      await remove(ref(db, `tasks/${removedUser}`));
+      console.log(`Firebase: removed tasks/${removedUser}`);
+    } catch (e) {
+      console.warn("Firebase remove error on deleteCurrentUser:", e);
+    }
+    // remove option
+    const select = document.getElementById("userSelect");
+    if (select) {
+      const option = [...select.options].find(opt => opt.value === removedUser);
+      if (option) option.remove();
+      // switch to all
+      currentUser = "all";
+      select.value = "all";
+      localStorage.setItem("currentUser", "all");
+    }
+    window.tasks = [];
+    if (typeof filterTasks === "function") filterTasks();
+    if (typeof showFirebaseToast === "function") showFirebaseToast(`🗑️ Đã xoá người dùng "${removedUser}" và toàn bộ dữ liệu.`);
+  } catch (err) {
+    console.error("Lỗi khi xoá người dùng:", err);
+    if (typeof showToast === "function") showToast("❌ Lỗi khi xoá người dùng, vui lòng thử lại!");
+  }
+}
 </script>
 
 </body>
