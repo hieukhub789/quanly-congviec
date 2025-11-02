@@ -2848,56 +2848,56 @@ window.saveToLocalStorage = async function() {
 </script>
 
 
+<!-- Firebase Compat + Dual Storage Fix -->
+<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-database-compat.js"></script>
 <script>
-// --- Dual-storage final overrides (appended) ---
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyB3YYnW0BElIeoRW-pBAWrSyo74QE1-64I",
+  authDomain: "hieu1-24be7.firebaseapp.com",
+  projectId: "hieu1-24be7",
+  storageBucket: "hieu1-24be7.firebasestorage.app",
+  messagingSenderId: "350859931788",
+  appId: "1:350859931788:web:945d67c77d5cd2906c4ba9",
+  measurementId: "G-VGP7L1QFX7",
+  databaseURL: "https://hieu1-24be7-default-rtdb.firebaseio.com"
+};
 
-// Ensure remove is available (if not using module imports earlier)
-async function _ensureRemoveAvailable() {
-  // noop - remove should be available from module import; if not, delete on cloud won't work
-}
+// Initialize Firebase compat
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-// saveToLocalStorage: saves local then syncs to Firebase; removes Firebase node if empty
+// --- Override functions for compat version ---
+
+// 1️⃣ saveToLocalStorage (sync local + Firebase)
 window.saveToLocalStorage = async function() {
   try {
-    if (typeof currentUser === "undefined" || !currentUser || currentUser === "all") {
-      console.warn("Không lưu: currentUser chưa xác định hoặc là 'all'");
-      return;
-    }
+    if (!currentUser || currentUser === "all") return;
+
     if (!Array.isArray(window.tasks)) window.tasks = [];
     const dataToSave = JSON.parse(JSON.stringify(window.tasks));
 
-    // save local
+    // Save local
     localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(dataToSave));
 
-    // sync to firebase
-    try {
-      const userRef = ref(db, `tasks/${currentUser}`);
-      if (dataToSave.length === 0) {
-        try {
-          await remove(userRef);
-          console.log(`Firebase: removed tasks/${currentUser}`);
-          if (typeof showFirebaseToast === "function") showFirebaseToast(`🗑️ Đã xoá dữ liệu Firebase của ${currentUser}`);
-        } catch (e) {
-          console.warn("Firebase remove error:", e);
-        }
-      } else {
-        try {
-          await set(userRef, dataToSave);
-          console.log(`Firebase: synced tasks/${currentUser}`);
-          if (typeof showFirebaseToast === "function") showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
-        } catch (e) {
-          console.warn("Firebase set error:", e);
-        }
-      }
-    } catch (e) {
-      console.warn("Firebase ref error:", e);
+    // Save Firebase
+    const userRef = db.ref(`tasks/${currentUser}`);
+    if (dataToSave.length === 0) {
+      await userRef.remove();
+      console.log(`Firebase: removed tasks/${currentUser}`);
+      if (typeof showFirebaseToast === "function") showFirebaseToast(`🗑️ Đã xoá dữ liệu Firebase của ${currentUser}`);
+    } else {
+      await userRef.set(dataToSave);
+      console.log(`Firebase: synced tasks/${currentUser}`);
+      if (typeof showFirebaseToast === "function") showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
     }
   } catch (err) {
-    console.error("Lỗi saveToLocalStorage (final):", err);
+    console.error("Lỗi saveToLocalStorage (compat):", err);
   }
 };
 
-// loadUserTasks: local-first, then cloud; avoid leaking previous user's tasks
+// 2️⃣ loadUserTasks (local-first, then Firebase)
 window.loadUserTasks = async function() {
   try {
     if (!currentUser || currentUser === "all") {
@@ -2906,82 +2906,67 @@ window.loadUserTasks = async function() {
       return;
     }
 
-    // read local
+    // Load local
     const localRaw = localStorage.getItem(`tasks_${currentUser}`);
     let localData = [];
     try {
       localData = localRaw ? JSON.parse(localRaw) : [];
-    } catch (e) {
-      localData = [];
-    }
+    } catch (e) { localData = []; }
     window.tasks = Array.isArray(localData) ? localData : [];
     if (typeof filterTasks === "function") filterTasks();
 
-    // read cloud
-    try {
-      const snapshot = await get(ref(db, `tasks/${currentUser}`));
-      if (snapshot.exists()) {
-        const cloudData = snapshot.val();
-        const cloudArr = Array.isArray(cloudData) ? cloudData : cloudData;
-        if (JSON.stringify(cloudArr) !== JSON.stringify(window.tasks)) {
-          window.tasks = Array.isArray(cloudArr) ? cloudArr : [];
-          localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(window.tasks));
-          console.log(`Firebase: loaded tasks/${currentUser}`);
-          if (typeof filterTasks === "function") filterTasks();
-          if (typeof showFirebaseToast === "function") showFirebaseToast(`☁️ Đã tải dữ liệu Firebase cho ${currentUser}`);
-        }
-      } else {
-        // no cloud data; if local empty keep empty
-        if (!localRaw) {
-          window.tasks = [];
-          localStorage.removeItem(`tasks_${currentUser}`);
-          if (typeof filterTasks === "function") filterTasks();
-        }
-        console.log(`Firebase: no data for ${currentUser}`);
+    // Load Firebase
+    const snapshot = await db.ref(`tasks/${currentUser}`).get();
+    if (snapshot.exists()) {
+      const cloudData = snapshot.val();
+      if (JSON.stringify(cloudData) !== JSON.stringify(window.tasks)) {
+        window.tasks = Array.isArray(cloudData) ? cloudData : [];
+        localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(window.tasks));
+        console.log(`Firebase: loaded tasks/${currentUser}`);
+        if (typeof filterTasks === "function") filterTasks();
+        if (typeof showFirebaseToast === "function") showFirebaseToast(`☁️ Đã tải dữ liệu Firebase cho ${currentUser}`);
       }
-    } catch (e) {
-      console.warn("Firebase get error:", e);
+    } else {
+      window.tasks = [];
+      localStorage.removeItem(`tasks_${currentUser}`);
+      if (typeof filterTasks === "function") filterTasks();
+      console.log(`Firebase: no data for ${currentUser}`);
     }
-
   } catch (err) {
-    console.error("Lỗi loadUserTasks (final):", err);
+    console.error("Lỗi loadUserTasks (compat):", err);
   }
 };
 
-// deleteCurrentUser: remove local, remove firebase node, remove option and switch to 'all'
+// 3️⃣ deleteCurrentUser (delete user + Firebase + local)
 async function deleteCurrentUser() {
   if (!currentUser || currentUser === "all") {
     if (typeof showToast === "function") showToast("❌ Không thể xóa người dùng mặc định 'Tất cả'!");
     return;
   }
+
   const confirmDelete = confirm(`⚠️ Bạn có chắc muốn xoá toàn bộ dữ liệu của người dùng "${currentUser}" không?\nHành động này không thể hoàn tác!`);
   if (!confirmDelete) return;
+
   try {
     const removedUser = currentUser;
-    // remove local
     localStorage.removeItem(`tasks_${removedUser}`);
-    // remove on firebase
-    try {
-      await remove(ref(db, `tasks/${removedUser}`));
-      console.log(`Firebase: removed tasks/${removedUser}`);
-    } catch (e) {
-      console.warn("Firebase remove error on deleteCurrentUser:", e);
-    }
-    // remove option
+    await db.ref(`tasks/${removedUser}`).remove();
+    console.log(`Firebase: removed tasks/${removedUser}`);
+
     const select = document.getElementById("userSelect");
     if (select) {
       const option = [...select.options].find(opt => opt.value === removedUser);
       if (option) option.remove();
-      // switch to all
       currentUser = "all";
       select.value = "all";
       localStorage.setItem("currentUser", "all");
     }
+
     window.tasks = [];
     if (typeof filterTasks === "function") filterTasks();
     if (typeof showFirebaseToast === "function") showFirebaseToast(`🗑️ Đã xoá người dùng "${removedUser}" và toàn bộ dữ liệu.`);
   } catch (err) {
-    console.error("Lỗi khi xoá người dùng:", err);
+    console.error("Lỗi khi xoá người dùng (compat):", err);
     if (typeof showToast === "function") showToast("❌ Lỗi khi xoá người dùng, vui lòng thử lại!");
   }
 }
