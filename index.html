@@ -2585,30 +2585,48 @@ function addNewUser() {
 
 
 // Xóa người dùng hiện tại
-function deleteCurrentUser() {
-  if (currentUser === "all") {
-  showToast("⚠️ Không thể xóa người dùng 'Tất cả' vì đây là chế độ tổng hợp dữ liệu!");
-  return;
+async function deleteCurrentUser() {
+  if (!currentUser || currentUser === "all") {
+    showToast("❌ Không thể xóa người dùng mặc định 'Tất cả'!");
+    return;
   }
 
-  if (!confirm(`Bạn có chắc muốn xóa người dùng "${currentUser}" và toàn bộ dữ liệu của họ không?`))
-    return;
+  const confirmDelete = confirm(`⚠️ Bạn có chắc muốn xoá toàn bộ dữ liệu của người dùng "${currentUser}" không?\nHành động này không thể hoàn tác!`);
+  if (!confirmDelete) return;
 
-  let users = JSON.parse(localStorage.getItem("users")) || [];
-  users = users.filter(u => u !== currentUser);
-  localStorage.setItem("users", JSON.stringify(users));
+  try {
+    // 🧹 1️⃣ Xoá dữ liệu trong localStorage
+    localStorage.removeItem(`tasks_${currentUser}`);
 
-  localStorage.removeItem(`tasks_${currentUser}`);
+    // ☁️ 2️⃣ Xoá dữ liệu trong Firebase
+    const userRef = ref(db, `tasks/${currentUser}`);
+    await remove(userRef);
+    console.log(`Firebase: removed tasks/${currentUser}`);
 
-  showToast(`🗑️ Đã xóa người dùng: ${currentUser}`);
+    // 🔄 3️⃣ Xoá user khỏi danh sách <select>
+    const select = document.getElementById("userSelect");
+    if (select) {
+      const optionToRemove = [...select.options].find(opt => opt.value === currentUser);
+      if (optionToRemove) optionToRemove.remove();
 
-  currentUser = "all";
-  localStorage.setItem("currentUser", currentUser);
+      // Chuyển về "all"
+      currentUser = "all";
+      select.value = "all";
+      localStorage.setItem("currentUser", "all");
+    }
 
-  closeModal("addUserModal");
-  loadUsers();
-  changeUser();
+    // 🧩 4️⃣ Làm trống dữ liệu hiển thị
+    window.tasks = [];
+    if (typeof filterTasks === "function") filterTasks();
+
+    showFirebaseToast(`🗑️ Đã xoá người dùng "${currentUser}" và toàn bộ dữ liệu liên quan.`);
+
+  } catch (err) {
+    console.error("Lỗi khi xoá người dùng:", err);
+    showToast("❌ Lỗi khi xoá người dùng, vui lòng thử lại!");
+  }
 }
+
 
 // --- Gọi khi load trang ---
 document.addEventListener("DOMContentLoaded", loadUsers);
