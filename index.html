@@ -2367,25 +2367,17 @@ function saveToLocalStorage() {
 }
 
 // --- Chuyển người dùng ---
-function changeUser() {
+async function changeUser() {
   const select = document.getElementById("userSelect");
   if (!select) return;
 
   currentUser = select.value;
   localStorage.setItem("currentUser", currentUser);
-
-  // Nạp lại dữ liệu theo người dùng
-  loadTasksForCurrentUser();
-
-  // Reset về trang đầu (nếu có phân trang)
   currentPage = 1;
-
-  // Cập nhật hiển thị
-  filterTasks();
   updateUIForUser();
 
-  // 🔹 Cập nhật trạng thái nút "Thêm"
-  const addBtn = document.getElementById("addBtn"); // đúng id trong file của bạn
+  // Cập nhật trạng thái nút "Thêm"
+  const addBtn = document.getElementById("addBtn");
   if (addBtn) {
     const disable = currentUser === "all";
     addBtn.disabled = disable;
@@ -2393,14 +2385,19 @@ function changeUser() {
     addBtn.style.cursor = disable ? "not-allowed" : "pointer";
   }
 
-  // 🔹 (Tùy chọn) cập nhật các nút khác
-  const clearBtn = document.getElementById("clearBtn");
-  if (clearBtn) clearBtn.disabled = currentUser === "all";
-  const importInput = document.getElementById("importJsonInput");
-  if (importInput) importInput.disabled = currentUser === "all";
+  // Gọi loadUserTasks (Firebase + Local)
+  if (typeof loadUserTasks === "function") {
+    try {
+      await loadUserTasks();
+      if (typeof filterTasks === "function") filterTasks();
+    } catch (err) {
+      console.warn("Lỗi khi load dữ liệu người dùng:", err);
+    }
+  }
 
   showToast(`Đã chuyển sang: ${currentUser === "all" ? "Tất cả" : currentUser}`);
 }
+
 
 
 // --- Bảo vệ khi ở chế độ tất cả ---
