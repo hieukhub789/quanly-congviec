@@ -2693,7 +2693,7 @@ function showSystemNotification(title, message, type = "info") {
 <script type="module">
   import { setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  const db = window.db;
+  //const db = window.db;
 
   // Simple toast helper (uses existing showToast if present, otherwise fallback)
   function tinyToast(msg) {
@@ -2792,6 +2792,156 @@ function showSystemNotification(title, message, type = "info") {
   window.dataChangedFlagSet = dataChangedFlagSet;
 </script>
 <!-- End auto-sync module -->
+
+
+<!-- Two-way Firestore sync injected by assistant -->
+<script type="module">
+  import { getDocs, collection, onSnapshot, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const db = window.db;
+  if (db) {
+    let remoteApplying = false;
+    let dataChanged = false;
+    let syncTimer = null;
+    const SYNC_DEBOUNCE_MS = 1200;
+
+    function tinyShowToast(msg) {
+      try { if (typeof showToast === 'function') { showToast(msg); return; } } catch(e) {}
+      const c = document.getElementById('toastContainer') || document.body;
+      const t = document.createElement('div');
+      t.style = "position:fixed;right:20px;bottom:20px;background:#2e7d32;color:#fff;padding:8px 12px;border-radius:6px;z-index:99999;box-shadow:0 3px 8px rgba(0,0,0,0.2);font-size:13px";
+      t.innerText = msg;
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),3000);
+    }
+
+    function markDataChanged() {
+      dataChanged = true;
+      scheduleSync();
+    }
+
+    function scheduleSync() {
+      if (!navigator.onLine) return;
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        syncTimer = null;
+        performFullUpload();
+      }, SYNC_DEBOUNCE_MS);
+    }
+
+    (function(){
+      try {
+        const origSet = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = function(k,v){
+          origSet(k,v);
+          if (k && (k.startsWith('tasks_') || k === 'repairs' || k === 'notes' || k === 'noiDungGhiChu')) {
+            markDataChanged();
+          }
+          return true;
+        };
+      } catch(e) {}
+    })();
+
+    async function loadAllFromFirebase() {
+      if (!navigator.onLine) return;
+      try {
+        const colRef = collection(db, 'users');
+        const snap = await getDocs(colRef);
+        remoteApplying = true;
+        snap.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          const username = (data.username || docSnap.id || 'unknown').toString();
+          try { localStorage.setItem(`tasks_${username}`, JSON.stringify(data.tasks || [])); } catch(e){}
+        });
+        tinyShowToast('☁️ Đã tải dữ liệu từ Firebase');
+        remoteApplying = false;
+      } catch(e) { remoteApplying = false; }
+    }
+
+    let unsub = null;
+    function subscribeAllUsersRealtime() {
+      if (!navigator.onLine) return;
+      try {
+        if (unsub) { try { unsub(); } catch(e){} unsub = null; }
+        const colRef = collection(db, 'users');
+        unsub = onSnapshot(colRef, (querySnapshot) => {
+          remoteApplying = true;
+         remoteApplying = true; // Bắt đầu áp dụng dữ liệu remote
+          let changed = false;
+         querySnapshot.docChanges().forEach(change => {
+         const id = change.doc.id;
+        const data = change.doc.data() || {};
+      const current = localStorage.getItem(`tasks_${id}`);
+  const newVal = JSON.stringify(data.tasks || []);
+  // Chỉ ghi vào localStorage nếu thực sự khác, tránh trigger vòng lặp
+  if (current !== newVal) {
+    localStorage.setItem(`tasks_${id}`, newVal);
+    changed = true;
+  }
+});
+if (changed) tinyShowToast('🔁 Firebase cập nhật tự động');
+remoteApplying = false;
+
+        }, (err)=>{});
+      } catch(e) {}
+    }
+
+    async function performFullUpload() {
+      if (!navigator.onLine) return;
+      if (remoteApplying) return;
+      if (!dataChanged) return;
+      dataChanged = false;
+      try {
+        const users = [];
+        for (let i=0;i<localStorage.length;i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('tasks_')) {
+            const username = key.replace('tasks_','');
+            users.push(username);
+          }
+        }
+        for (const username of users) {
+          try {
+            const tasks = JSON.parse(localStorage.getItem(`tasks_${username}`) || '[]');
+            const repairs = JSON.parse(localStorage.getItem('repairs') || '[]');
+            const notes = localStorage.getItem('noiDungGhiChu') || localStorage.getItem('notes') || '';
+            await setDoc(doc(db, 'users', username), {
+              username,
+              tasks,
+              repairs,
+              notes,
+              lastSync: new Date().toISOString()
+            });
+          } catch(e) {}
+        }
+        tinyShowToast('✅ Đồng bộ Firebase thành công');
+      } catch(e) {}
+    }
+
+    window.addEventListener('load', () => {
+      if (navigator.onLine) {
+        (async ()=>{
+          await loadAllFromFirebase();
+          subscribeAllUsersRealtime();
+          if (dataChanged) scheduleSync();
+        })();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      (async ()=>{
+        await loadAllFromFirebase();
+        subscribeAllUsersRealtime();
+        if (dataChanged) scheduleSync();
+      })();
+    });
+
+    window._fire_sync_loadAllFromFirebase = loadAllFromFirebase;
+    window._fire_sync_subscribeAllUsersRealtime = subscribeAllUsersRealtime;
+    window._fire_sync_performFullUpload = performFullUpload;
+  }
+</script>
+<!-- End two-way sync -->
 
 </body>
 </html>
