@@ -2911,9 +2911,13 @@ function showSystemNotification(title, message, type = "info") {
             const ref = doc(db, 'users', username);
             const existingSnap = await getDoc(ref);
             const existing = existingSnap.exists() ? existingSnap.data() : {};
-            if (JSON.stringify(existing.tasks) !== JSON.stringify(tasks)) {
-            await setDoc(ref, { username, tasks, repairs, notes, lastSync: new Date().toISOString() });
-            }
+            const newData = { username, tasks, repairs, notes };
+if (JSON.stringify(existing.tasks) !== JSON.stringify(tasks)) {
+  // Chỉ thêm lastSync khi có thay đổi thật sự
+  newData.lastSync = new Date().toISOString();
+  await setDoc(ref, newData);
+}
+
 
           } catch(e) {}
         }
