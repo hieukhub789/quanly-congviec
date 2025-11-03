@@ -2865,26 +2865,27 @@ function showSystemNotification(title, message, type = "info") {
         if (unsub) { try { unsub(); } catch(e){} unsub = null; }
         const colRef = collection(db, 'users');
         unsub = onSnapshot(colRef, { includeMetadataChanges: false }, (querySnapshot) => {
-         remoteApplying = true; // Bắt đầu áp dụng dữ liệu remote
-          let changed = false;
-            let hasRealChange = false;
+  remoteApplying = true;
+  let hasRealChange = false;
 
-         querySnapshot.docChanges().forEach(change => {
-         const id = change.doc.id;
-        const data = change.doc.data() || {};
-      const current = localStorage.getItem(`tasks_${id}`);
-  const newVal = JSON.stringify(data.tasks || []);
-  // Chỉ ghi vào localStorage nếu thực sự khác, tránh trigger vòng lặp
-  if (current !== newVal) {
-    localStorage.setItem(`tasks_${id}`, newVal);
-    changed = true;
-    hasRealChange = true; // ✅ đánh dấu có thay đổi thực
+  querySnapshot.forEach((docSnap) => {
+    const id = docSnap.id;
+    const data = docSnap.data() || {};
+    const newTasks = JSON.stringify(data.tasks || []);
+    const currentTasks = localStorage.getItem(`tasks_${id}`);
+    if (currentTasks !== newTasks) {
+      localStorage.setItem(`tasks_${id}`, newTasks);
+      hasRealChange = true;
+    }
+  });
+
+  if (hasRealChange) {
+    tinyShowToast('🔁 Firebase cập nhật tự động');
   }
-});
-if (changed  && hasRealChange) tinyShowToast('🔁 Firebase cập nhật tự động');
-remoteApplying = false;
 
-        }, (err)=>{});
+  remoteApplying = false;
+}, (err) => {});
+
       } catch(e) {}
     }
 
