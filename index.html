@@ -639,7 +639,7 @@
 <!-- Firebase config & init (injected by assistant) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB3YYnW0BElIeoRW-pBAWrSyo74QE1-64I",
@@ -655,6 +655,7 @@
   const app = initializeApp(firebaseConfig);
   window.firebaseApp = app;
   window.db = getFirestore(app);
+  window.firebaseFns = { collection, addDoc, getDocs, deleteDoc, doc, setDoc };
 </script>
 <!-- End Firebase init -->
 
@@ -707,6 +708,7 @@
     <input type="text" id="noteInput" placeholder="Ghi chú">
     <button id="addBtn" onclick="addTask()">Thêm</button>
     <button id="exportBtn" onclick="showExportModal()">Xuất</button>
+    <button id="syncBtn" onclick="syncNow()" style="background-color: #17a2b8;">🔄 Đồng bộ</button>
     <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
@@ -2792,6 +2794,58 @@ function showSystemNotification(title, message, type = "info") {
   window.dataChangedFlagSet = dataChangedFlagSet;
 </script>
 <!-- End auto-sync module -->
+
+
+<script>
+async function syncNow() {
+  const user = typeof currentUser !== "undefined"
+    ? currentUser
+    : (document.getElementById("userSelect") ? document.getElementById("userSelect").value : null);
+
+  if (!user || user === "all") {
+    showToast("⚠️ Không thể đồng bộ ở chế độ 'Tất cả'!");
+    return;
+  }
+
+  showToast("🔄 Đang tải dữ liệu từ Firestore...");
+
+  try {
+    const db = window.db;
+    const { collection, getDocs } = window.firebaseFns || {};
+    if (!db || !collection || !getDocs) {
+      showToast("❌ Firebase chưa được khởi tạo đầy đủ.");
+      return;
+    }
+
+    // Lấy dữ liệu từ Firestore
+    const colRef = collection(db, `users/${user}/tasks`);
+    const snap = await getDocs(colRef);
+    const cloudTasks = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+
+    if (cloudTasks.length === 0) {
+      // Nếu Firestore trống → xoá local
+      localStorage.setItem(`tasks_${user}`, JSON.stringify([]));
+      tasks = [];
+      filterTasks();
+      showToast("🗑️ Firestore trống — dữ liệu local đã bị xoá!");
+      return;
+    }
+
+    // Nếu có dữ liệu → ghi đè local
+    const freshTasks = cloudTasks.map(({ id, ...rest }) => rest);
+    localStorage.setItem(`tasks_${user}`, JSON.stringify(freshTasks));
+    tasks = freshTasks;
+    filterTasks();
+
+    showToast(`✅ Đã tải ${freshTasks.length} công việc từ Firestore về!`);
+  } catch (err) {
+    console.error(err);
+    showToast("❌ Lỗi khi tải dữ liệu từ Firestore!");
+  }
+}
+</script>
+
+
 
 </body>
 </html>
