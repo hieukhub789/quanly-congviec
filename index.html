@@ -2867,6 +2867,8 @@ function showSystemNotification(title, message, type = "info") {
         unsub = onSnapshot(colRef, { includeMetadataChanges: false }, (querySnapshot) => {
          remoteApplying = true; // Bắt đầu áp dụng dữ liệu remote
           let changed = false;
+            let hasRealChange = false;
+
          querySnapshot.docChanges().forEach(change => {
          const id = change.doc.id;
         const data = change.doc.data() || {};
@@ -2876,9 +2878,10 @@ function showSystemNotification(title, message, type = "info") {
   if (current !== newVal) {
     localStorage.setItem(`tasks_${id}`, newVal);
     changed = true;
+    hasRealChange = true; // ✅ đánh dấu có thay đổi thực
   }
 });
-if (changed) tinyShowToast('🔁 Firebase cập nhật tự động');
+if (changed  && hasRealChange) tinyShowToast('🔁 Firebase cập nhật tự động');
 remoteApplying = false;
 
         }, (err)=>{});
