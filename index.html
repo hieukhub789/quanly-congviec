@@ -2864,7 +2864,7 @@ function showSystemNotification(title, message, type = "info") {
       try {
         if (unsub) { try { unsub(); } catch(e){} unsub = null; }
         const colRef = collection(db, 'users');
-        unsub = onSnapshot(colRef, (querySnapshot) => {
+        unsub = onSnapshot(colRef, { includeMetadataChanges: false }, (querySnapshot) => {
          remoteApplying = true; // Bắt đầu áp dụng dữ liệu remote
           let changed = false;
          querySnapshot.docChanges().forEach(change => {
