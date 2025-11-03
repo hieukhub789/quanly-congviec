@@ -2743,7 +2743,7 @@ function showSystemNotification(title, message, type = "info") {
     }
     if (syncInProgress) return;
     syncInProgress = true;
-    tinyToast('🔄 Đồng bộ Firebase...');
+    //tinyToast('🔄 Đồng bộ Firebase...');
 
     try {
       // collect all users from localStorage keys tasks_*
@@ -2879,9 +2879,9 @@ function showSystemNotification(title, message, type = "info") {
     }
   });
 
-  if (hasRealChange) {
-    tinyShowToast('🔁 Firebase cập nhật tự động');
-  }
+  // if (hasRealChange) {
+  //   tinyShowToast('🔁 Firebase cập nhật tự động');
+  // }
 
   remoteApplying = false;
 }, (err) => {});
@@ -2921,7 +2921,7 @@ if (JSON.stringify(existing.tasks) !== JSON.stringify(tasks)) {
 
           } catch(e) {}
         }
-        tinyShowToast('✅ Đồng bộ Firebase thành công');
+        // tinyShowToast('✅ Đồng bộ Firebase thành công');
       } catch(e) {}
     }
 
