@@ -633,11 +633,31 @@
 
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr">
-    import { set, getDatabase, ref, remove } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<!-- Firebase config & init (injected by assistant) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB3YYnW0BElIeoRW-pBAWrSyo74QE1-64I",
+    authDomain: "hieu1-24be7.firebaseapp.com",
+    databaseURL: "https://hieu1-24be7-default-rtdb.firebaseio.com",
+    projectId: "hieu1-24be7",
+    storageBucket: "hieu1-24be7.firebasestorage.app",
+    messagingSenderId: "350859931788",
+    appId: "1:350859931788:web:945d67c77d5cd2906c4ba9",
+    measurementId: "G-VGP7L1QFX7"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window.firebaseApp = app;
+  window.db = getFirestore(app);
+</script>
+<!-- End Firebase init -->
+
 </head>
 <body>
   <h2 style="text-align: center; color: #2c3e50;">Ứng dụng Quản lý Công việc Cá nhân và Nhóm</h2>
@@ -1331,6 +1351,8 @@ function showExportModal() {
         exportContent.style.overflow = "auto";
         document.querySelectorAll(".hide-when-capture").forEach(el => el.style.display = "inline-block");
       });
+      document.getElementById("exportModal").style.display = "none";
+
     }
 
     function closeModal(modalId) {
@@ -2370,20 +2392,21 @@ function saveToLocalStorage() {
 }
 
 // --- Chuyển người dùng ---
-async function changeUser() {
+function changeUser() {
   const select = document.getElementById("userSelect");
   if (!select) return;
 
   currentUser = select.value;
   localStorage.setItem("currentUser", currentUser);
-
-  // ✅ Reset dữ liệu tạm của user cũ
-  window.tasks = [];
+  // Reset về trang đầu (nếu có phân trang)
   currentPage = 1;
+
+  // Cập nhật hiển thị
+  filterTasks();
   updateUIForUser();
 
-  // Cập nhật trạng thái nút "Thêm"
-  const addBtn = document.getElementById("addBtn");
+  // 🔹 Cập nhật trạng thái nút "Thêm"
+  const addBtn = document.getElementById("addBtn"); // đúng id trong file của bạn
   if (addBtn) {
     const disable = currentUser === "all";
     addBtn.disabled = disable;
@@ -2391,19 +2414,16 @@ async function changeUser() {
     addBtn.style.cursor = disable ? "not-allowed" : "pointer";
   }
 
-  // Gọi loadUserTasks (Firebase + Local)
-  if (typeof loadUserTasks === "function") {
-    try {
-      await loadUserTasks();
-      if (typeof filterTasks === "function") filterTasks();
-    } catch (err) {
-      console.warn("Lỗi khi load dữ liệu người dùng:", err);
-    }
-  }
+  // 🔹 (Tùy chọn) cập nhật các nút khác
+  const clearBtn = document.getElementById("clearBtn");
+  if (clearBtn) clearBtn.disabled = currentUser === "all";
+  const importInput = document.getElementById("importJsonInput");
+  if (importInput) importInput.disabled = currentUser === "all";
 
   showToast(`Đã chuyển sang: ${currentUser === "all" ? "Tất cả" : currentUser}`);
-}
+  loadUserTasks();
 
+}
 
 
 // --- Bảo vệ khi ở chế độ tất cả ---
@@ -2585,48 +2605,30 @@ function addNewUser() {
 
 
 // Xóa người dùng hiện tại
-async function deleteCurrentUser() {
-  if (!currentUser || currentUser === "all") {
-    showToast("❌ Không thể xóa người dùng mặc định 'Tất cả'!");
+function deleteCurrentUser() {
+  if (currentUser === "all") {
+  showToast("⚠️ Không thể xóa người dùng 'Tất cả' vì đây là chế độ tổng hợp dữ liệu!");
+  return;
+  }
+
+  if (!confirm(`Bạn có chắc muốn xóa người dùng "${currentUser}" và toàn bộ dữ liệu của họ không?`))
     return;
-  }
 
-  const confirmDelete = confirm(`⚠️ Bạn có chắc muốn xoá toàn bộ dữ liệu của người dùng "${currentUser}" không?\nHành động này không thể hoàn tác!`);
-  if (!confirmDelete) return;
+  let users = JSON.parse(localStorage.getItem("users")) || [];
+  users = users.filter(u => u !== currentUser);
+  localStorage.setItem("users", JSON.stringify(users));
 
-  try {
-    // 🧹 1️⃣ Xoá dữ liệu trong localStorage
-    localStorage.removeItem(`tasks_${currentUser}`);
+  localStorage.removeItem(`tasks_${currentUser}`);
 
-    // ☁️ 2️⃣ Xoá dữ liệu trong Firebase
-    const userRef = ref(db, `tasks/${currentUser}`);
-    await remove(userRef);
-    console.log(`Firebase: removed tasks/${currentUser}`);
+  showToast(`🗑️ Đã xóa người dùng: ${currentUser}`);
 
-    // 🔄 3️⃣ Xoá user khỏi danh sách <select>
-    const select = document.getElementById("userSelect");
-    if (select) {
-      const optionToRemove = [...select.options].find(opt => opt.value === currentUser);
-      if (optionToRemove) optionToRemove.remove();
+  currentUser = "all";
+  localStorage.setItem("currentUser", currentUser);
 
-      // Chuyển về "all"
-      currentUser = "all";
-      select.value = "all";
-      localStorage.setItem("currentUser", "all");
-    }
-
-    // 🧩 4️⃣ Làm trống dữ liệu hiển thị
-    window.tasks = [];
-    if (typeof filterTasks === "function") filterTasks();
-
-    showFirebaseToast(`🗑️ Đã xoá người dùng "${currentUser}" và toàn bộ dữ liệu liên quan.`);
-
-  } catch (err) {
-    console.error("Lỗi khi xoá người dùng:", err);
-    showToast("❌ Lỗi khi xoá người dùng, vui lòng thử lại!");
-  }
+  closeModal("addUserModal");
+  loadUsers();
+  changeUser();
 }
-
 
 // --- Gọi khi load trang ---
 document.addEventListener("DOMContentLoaded", loadUsers);
@@ -2694,176 +2696,109 @@ function showSystemNotification(title, message, type = "info") {
 }
 </script>
 
+<!-- Auto-sync to Firestore (injected by assistant) -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+  import { setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyB3YYnW0BElIeoRW-pBAWrSyo74QE1-64I",
-    authDomain: "hieu1-24be7.firebaseapp.com",
-    databaseURL: "https://hieu1-24be7-default-rtdb.firebaseio.com",
-    projectId: "hieu1-24be7",
-    storageBucket: "hieu1-24be7.firebasestorage.app",
-    messagingSenderId: "350859931788",
-    appId: "1:350859931788:web:945d67c77d5cd2906c4ba9",
-    measurementId: "G-VGP7L1QFX7"
-  };
+  const db = window.db;
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-
-  function showFirebaseToast(message, isError=false) {
-    const toast = document.createElement("div");
-    toast.textContent = message;
-    toast.style.position = "fixed";
-    toast.style.bottom = "24px";
-    toast.style.right = "24px";
-    toast.style.background = isError ? "#e74c3c" : "#2c7be5";
-    toast.style.color = "#fff";
-    toast.style.padding = "10px 16px";
-    toast.style.borderRadius = "10px";
-    toast.style.fontSize = "14px";
-    toast.style.zIndex = "99999";
-    toast.style.boxShadow = "0 6px 18px rgba(0,0,0,0.15)";
-    toast.style.opacity = "0";
-    toast.style.transition = "opacity 300ms ease, transform 300ms ease";
-    toast.style.transform = "translateY(8px)";
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => {
-      toast.style.opacity = "1";
-      toast.style.transform = "translateY(0)";
-    });
-    setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateY(8px)";
-      setTimeout(() => toast.remove(), 300);
-    }, 2500);
+  // Simple toast helper (uses existing showToast if present, otherwise fallback)
+  function tinyToast(msg) {
+    try { if (typeof showToast === 'function') return showToast(msg); } catch(e){}
+    // fallback small temporary toast
+    const c = document.getElementById('toastContainer') || document.body;
+    const t = document.createElement('div');
+    t.style = "position:fixed;right:20px;bottom:20px;background:#2e7d32;color:#fff;padding:8px 12px;border-radius:6px;z-index:99999;box-shadow:0 3px 8px rgba(0,0,0,0.2);font-size:13px";
+    t.innerText = msg;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),3000);
   }
 
-window.saveToLocalStorage = async function() {
-  try {
-    // 🔹 Bảo vệ: Không lưu khi chưa chọn user
-    if (typeof currentUser === "undefined" || !currentUser || currentUser === "all") {
-      console.warn("Không lưu: currentUser chưa xác định hoặc là 'all'");
+  let dataChanged = false;
+  let syncInProgress = false;
+
+  // mark changed
+  function dataChangedFlagSet(){
+    dataChanged = true;
+    tryAutoSync();
+  }
+
+  // Try to auto sync if online
+  function tryAutoSync(){
+    if (navigator.onLine && dataChanged && !syncInProgress) {
+      syncToFirestoreAll();
+    }
+  }
+
+  // Override localStorage.setItem to mark changes (non-destructive)
+  (function(){
+    const origSet = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function(k,v){
+      origSet(k,v);
+      if (k.startsWith('tasks_') || k === 'repairs' || k === 'notes' || k === 'noiDungGhiChu') {
+        dataChangedFlagSet();
+      }
+      return true;
+    };
+  })();
+
+  // Core: delete doc then set doc for each user document
+  async function syncToFirestoreAll(){
+    if (!db) {
+      console.warn('Firestore not initialized');
       return;
     }
+    if (syncInProgress) return;
+    syncInProgress = true;
+    tinyToast('🔄 Đồng bộ Firebase...');
 
-    // 🔹 Đảm bảo không bị lẫn dữ liệu user cũ
-    if (!Array.isArray(window.tasks)) window.tasks = [];
-    const dataToSave = [...window.tasks]; // clone mảng hiện tại
-
-    // 1️⃣ Lưu localStorage
-    localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(dataToSave));
-
-    // 2️⃣ Lưu Firebase
     try {
-      const userRef = ref(db, `tasks/${currentUser}`);
+      // collect all users from localStorage keys tasks_*
+      const users = [];
+      for (let i=0;i<localStorage.length;i++){
+        const key = localStorage.key(i);
+        if (key && key.startsWith('tasks_')) {
+          users.push(key.replace('tasks_',''));
+        }
+      }
+      // make unique
+      const uniqUsers = Array.from(new Set(users));
+      for (const username of uniqUsers) {
+        const tasks = JSON.parse(localStorage.getItem('tasks_'+username) || '[]');
+        const repairs = JSON.parse(localStorage.getItem('repairs') || '[]');
+        // notes: prefer the big notes area 'noiDungGhiChu' if present, else 'notes' key
+        const notes = localStorage.getItem('noiDungGhiChu') || localStorage.getItem('notes') || '';
 
-      if (dataToSave.length === 0) {
-        // ✅ Nếu mảng trống thì xoá hoàn toàn node của user
-        await remove(userRef);
-        console.log(`Firebase: removed tasks/${currentUser}`);
-        showFirebaseToast(`🗑️ Đã xoá dữ liệu Firebase của ${currentUser}`);
-      } else {
-        // ✅ Nếu có dữ liệu thì ghi đè lên node đó
-        await set(userRef, dataToSave);
-        console.log(`Firebase: synced tasks/${currentUser}`);
-        showFirebaseToast(`☁️ Đã đồng bộ Firebase cho ${currentUser}`);
+        // Delete existing doc (best-effort) then set new
+        try { await deleteDoc(doc(db, 'users', username)); } catch(e) { /* ignore */ }
+        await setDoc(doc(db, 'users', username), {
+          username,
+          tasks,
+          repairs,
+          notes,
+          lastSync: new Date().toISOString()
+        });
       }
 
+      tinyToast('✅ Đồng bộ Firebase thành công');
+      dataChanged = false;
     } catch (err) {
-      console.warn("Firebase set/remove error:", err);
-      // không cần show lỗi vì bạn chọn "chỉ hiện khi thành công"
+      console.error('Sync error', err);
+      tinyToast('⚠️ Lỗi đồng bộ Firebase');
+    } finally {
+      syncInProgress = false;
     }
-
-  } catch (err) {
-    console.error("Lỗi saveToLocalStorage (dual):", err);
   }
-};
 
-  
+  // sync on online event and on load if online
+  window.addEventListener('online', tryAutoSync);
+  window.addEventListener('load', () => { tryAutoSync(); });
 
-  // Override loadUserTasks: local-first, then cloud sync if available
-  window.loadUserTasks = async function() {
-    try {
-      if (typeof currentUser === "undefined" || !currentUser) {
-        console.warn("Không thể load: currentUser chưa xác định");
-        window.tasks = [];
-        if (typeof filterTasks === "function") filterTasks();
-        return;
-      }
-
-      // 1) Read local first
-      const localRaw = localStorage.getItem(`tasks_${currentUser}`);
-      let localData = [];
-      try {
-        localData = localRaw ? JSON.parse(localRaw) : [];
-      } catch (err) {
-        console.warn("Local parse error, reset to []", err);
-        localData = [];
-      }
-      window.tasks = Array.isArray(localData) ? localData : [];
-      if (typeof filterTasks === "function") filterTasks();
-
-      // 2) Then try cloud
-      try {
-        const snapshot = await get(ref(db, `tasks/${currentUser}`));
-        if (snapshot.exists()) {
-          const cloudData = snapshot.val();
-          const finalData = Array.isArray(cloudData) ? cloudData : cloudData;
-          const cloudJson = JSON.stringify(finalData || []);
-          const localJson = JSON.stringify(window.tasks || []);
-          if (cloudJson !== localJson) {
-            localStorage.setItem(`tasks_${currentUser}`, cloudJson);
-            window.tasks = Array.isArray(finalData) ? finalData : finalData;
-            console.log(`Firebase: loaded tasks/${currentUser}`);
-            showFirebaseToast(`☁️ Đã tải dữ liệu Firebase cho ${currentUser}`);
-            if (typeof filterTasks === "function") filterTasks();
-          } else {
-            console.log("Firebase data same as local — không cần cập nhật UI.");
-          }
-        } else {
-          console.log("No cloud data for", currentUser);
-        }
-      } catch (err) {
-        console.warn("Firebase get error:", err);
-      }
-    } catch (err) {
-      console.error("Lỗi loadUserTasks (dual):", err);
-      window.tasks = window.tasks || [];
-      if (typeof filterTasks === "function") filterTasks();
-    }
-  };
-
-  window.syncNowToFirebase = async function() {
-    if (typeof saveToLocalStorage === "function") {
-      await saveToLocalStorage();
-    }
-  };
-
-  window.addEventListener("load", async () => {
-    try {
-      if (!window.currentUser) {
-        const saved = localStorage.getItem("currentUser");
-        if (saved) {
-          window.currentUser = saved;
-          const sel = document.getElementById("userSelect");
-          if (sel) sel.value = saved;
-        }
-      }
-      if (typeof loadUserTasks === "function") {
-        await loadUserTasks();
-      }
-    } catch (err) {
-      console.warn("Error during initial dual-load:", err);
-    }
-  });
-
-  window.addEventListener("online", () => {
-    console.log("Navigator: online — thử sync");
-    if (typeof syncNowToFirebase === "function") syncNowToFirebase();
-  });
+  // expose for manual control if needed
+  window.syncToFirestoreAll = syncToFirestoreAll;
+  window.dataChangedFlagSet = dataChangedFlagSet;
 </script>
+<!-- End auto-sync module -->
 
 </body>
 </html>
