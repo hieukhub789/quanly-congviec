@@ -2648,14 +2648,10 @@ function showSystemNotification(title, message, type = "info") {
     task: "https://cdn-icons-png.flaticon.com/512/1828/1828817.png"
   };
 
-  const sounds = {
-    info: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_2f5066dce0.mp3?filename=notification-tone-28656.mp3",
-    success: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_5d5b4f2c6b.mp3?filename=correct-2-46134.mp3",
-    warning: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c06f9f7397.mp3?filename=error-126627.mp3"
-  };
+  
 
   const icon = icons[type] || icons.info;
-  const sound = sounds[type] || sounds.info;
+  
 
   // ✅ Nếu có quyền thì hiển thị luôn
   if (Notification.permission === "granted") {
@@ -2667,10 +2663,7 @@ function showSystemNotification(title, message, type = "info") {
       requireInteraction: true // giữ lại đến khi bấm hoặc đóng
     });
 
-    // 🔊 Phát âm thanh nhẹ
-    const audio = new Audio(sound);
-    audio.volume = 0.4;
-    audio.play().catch(() => {});
+   
 
     // ⏰ Tự đóng sau 10 giây
     //setTimeout(() => noti.close(), 10000);
