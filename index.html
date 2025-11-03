@@ -2693,7 +2693,7 @@ function showSystemNotification(title, message, type = "info") {
 <script type="module">
   import { setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  //const db = window.db;
+  const db = window.db;
 
   // Simple toast helper (uses existing showToast if present, otherwise fallback)
   function tinyToast(msg) {
@@ -2743,7 +2743,7 @@ function showSystemNotification(title, message, type = "info") {
     }
     if (syncInProgress) return;
     syncInProgress = true;
-    //tinyToast('🔄 Đồng bộ Firebase...');
+    
 
     try {
       // collect all users from localStorage keys tasks_*
@@ -2798,8 +2798,8 @@ function showSystemNotification(title, message, type = "info") {
 <script type="module">
   import { getDocs, collection, onSnapshot, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  const db = window.db;
-  if (db) {
+  const db1 = window.db;
+  if (db1) {
     let remoteApplying = false;
     let dataChanged = false;
     let syncTimer = null;
@@ -2864,28 +2864,16 @@ function showSystemNotification(title, message, type = "info") {
       try {
         if (unsub) { try { unsub(); } catch(e){} unsub = null; }
         const colRef = collection(db, 'users');
-        unsub = onSnapshot(colRef, { includeMetadataChanges: false }, (querySnapshot) => {
-  remoteApplying = true;
-  let hasRealChange = false;
-
-  querySnapshot.forEach((docSnap) => {
-    const id = docSnap.id;
-    const data = docSnap.data() || {};
-    const newTasks = JSON.stringify(data.tasks || []);
-    const currentTasks = localStorage.getItem(`tasks_${id}`);
-    if (currentTasks !== newTasks) {
-      localStorage.setItem(`tasks_${id}`, newTasks);
-      hasRealChange = true;
-    }
-  });
-
-  // if (hasRealChange) {
-  //   tinyShowToast('🔁 Firebase cập nhật tự động');
-  // }
-
-  remoteApplying = false;
-}, (err) => {});
-
+        unsub = onSnapshot(colRef, (querySnapshot) => {
+          remoteApplying = true;
+          querySnapshot.docChanges().forEach(change => {
+            const id = change.doc.id;
+            const data = change.doc.data() || {};
+            try { localStorage.setItem(`tasks_${id}`, JSON.stringify(data.tasks || [])); } catch(e){}
+          });
+          
+          remoteApplying = false;
+        }, (err)=>{});
       } catch(e) {}
     }
 
@@ -2908,20 +2896,16 @@ function showSystemNotification(title, message, type = "info") {
             const tasks = JSON.parse(localStorage.getItem(`tasks_${username}`) || '[]');
             const repairs = JSON.parse(localStorage.getItem('repairs') || '[]');
             const notes = localStorage.getItem('noiDungGhiChu') || localStorage.getItem('notes') || '';
-            const ref = doc(db, 'users', username);
-            const existingSnap = await getDoc(ref);
-            const existing = existingSnap.exists() ? existingSnap.data() : {};
-            const newData = { username, tasks, repairs, notes };
-if (JSON.stringify(existing.tasks) !== JSON.stringify(tasks)) {
-  // Chỉ thêm lastSync khi có thay đổi thật sự
-  newData.lastSync = new Date().toISOString();
-  await setDoc(ref, newData);
-}
-
-
+            await setDoc(doc(db, 'users', username), {
+              username,
+              tasks,
+              repairs,
+              notes,
+              lastSync: new Date().toISOString()
+            });
           } catch(e) {}
         }
-        // tinyShowToast('✅ Đồng bộ Firebase thành công');
+        tinyShowToast('✅ Đồng bộ Firebase thành công');
       } catch(e) {}
     }
 
