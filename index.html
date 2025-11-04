@@ -708,6 +708,9 @@
     <button id="addBtn" onclick="addTask()">Thêm</button>
     <button id="exportBtn" onclick="showExportModal()">Xuất</button>
     <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
+    <button id="syncBtn" onclick="syncFromFirebase()" style="background-color:#8e44ad; color:white;">🔄 Đồng bộ từ Cloud</button>
+
+
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
     <button onclick="showRepairModal()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
@@ -2790,7 +2793,86 @@ function showSystemNotification(title, message, type = "info") {
   // expose for manual control if needed
   window.syncToFirestoreAll = syncToFirestoreAll;
   window.dataChangedFlagSet = dataChangedFlagSet;
+
+
+  
 </script>
+<script type="module">
+  import { getFirestore, collection, getDocs } 
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  
+
+  // 🔄 Chỉ tải dữ liệu từ Firebase về Local, không ghi đè, chỉ thêm mới
+  window.syncFromFirebase = async function() {
+    const user = window.currentUser || "nhi"; // lấy người dùng hiện tại
+    const colRef = collection(db, "tasks_" + user);
+
+    try {
+      // 🔹 Lấy dữ liệu trên Firestore
+      const snapshot = await getDocs(colRef);
+      const cloudTasks = snapshot.docs.map(doc => doc.data());
+
+      // 🔹 Lấy dữ liệu local
+      const localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+      // 🔹 Lọc dữ liệu mới chưa có trong local (so sánh task + note + date)
+      const merged = [...localTasks];
+      let addedCount = 0;
+
+      cloudTasks.forEach(cloudTask => {
+        const exists = localTasks.some(
+          local =>
+            local.task === cloudTask.task &&
+            (local.note || "") === (cloudTask.note || "") &&
+            local.date === cloudTask.date
+        );
+        if (!exists) {
+          merged.push(cloudTask);
+          addedCount++;
+        }
+      });
+
+      // 🔹 Nếu có dữ liệu mới thì lưu lại
+      if (addedCount > 0) {
+        localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+        window.tasks = merged;
+        if (typeof window.filterTasks === "function") window.filterTasks();
+      }
+
+      // 🔹 Thông báo kết quả
+      tinyShowToast(
+        addedCount > 0
+          ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
+          : "☁️ Dữ liệu đã được cập nhật, không có gì mới."
+      );
+    } catch (err) {
+      console.error(err);
+      tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
+    }
+  };
+
+  // 🔔 Hàm hiển thị thông báo nhỏ
+  window.tinyShowToast = function(msg) {
+    const el = document.createElement("div");
+    el.textContent = msg;
+    Object.assign(el.style, {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      background: "#2ecc71",
+      color: "white",
+      padding: "10px 15px",
+      borderRadius: "8px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+      zIndex: 9999,
+      fontWeight: "bold"
+    });
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  };
+</script>
+
 <!-- End auto-sync module -->
 
 </body>
