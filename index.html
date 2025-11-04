@@ -639,7 +639,7 @@
 <!-- Firebase config & init (injected by assistant) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB3YYnW0BElIeoRW-pBAWrSyo74QE1-64I",
@@ -655,7 +655,6 @@
   const app = initializeApp(firebaseConfig);
   window.firebaseApp = app;
   window.db = getFirestore(app);
-  window.firebaseFns = { collection, addDoc, getDocs, deleteDoc, doc, setDoc };
 </script>
 <!-- End Firebase init -->
 
@@ -708,7 +707,6 @@
     <input type="text" id="noteInput" placeholder="Ghi chú">
     <button id="addBtn" onclick="addTask()">Thêm</button>
     <button id="exportBtn" onclick="showExportModal()">Xuất</button>
-    <button id="syncBtn" onclick="syncNow()" style="background-color: #17a2b8;">🔄 Đồng bộ</button>
     <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
@@ -2692,74 +2690,108 @@ function showSystemNotification(title, message, type = "info") {
 </script>
 
 <!-- Auto-sync to Firestore (injected by assistant) -->
-<script>
-async function syncNow() {
-  const user = typeof currentUser !== "undefined"
-    ? currentUser
-    : (document.getElementById("userSelect") ? document.getElementById("userSelect").value : null);
+<script type="module">
+  import { setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  if (!user || user === "all") {
-    showToast("⚠️ Không thể đồng bộ ở chế độ 'Tất cả'!");
-    return;
+  const db = window.db;
+
+  // Simple toast helper (uses existing showToast if present, otherwise fallback)
+  function tinyToast(msg) {
+    try { if (typeof showToast === 'function') return showToast(msg); } catch(e){}
+    // fallback small temporary toast
+    const c = document.getElementById('toastContainer') || document.body;
+    const t = document.createElement('div');
+    t.style = "position:fixed;right:20px;bottom:20px;background:#2e7d32;color:#fff;padding:8px 12px;border-radius:6px;z-index:99999;box-shadow:0 3px 8px rgba(0,0,0,0.2);font-size:13px";
+    t.innerText = msg;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),3000);
   }
 
-  showToast("🔄 Đang tải dữ liệu từ Firestore...");
+  let dataChanged = false;
+  let syncInProgress = false;
 
-  try {
-    const db = window.db;
-    const { collection, getDocs } = window.firebaseFns || {};
-    if (!db || !collection || !getDocs) {
-      showToast("❌ Firebase chưa được khởi tạo đầy đủ.");
-      return;
+  // mark changed
+  function dataChangedFlagSet(){
+    dataChanged = true;
+    tryAutoSync();
+  }
+
+  // Try to auto sync if online
+  function tryAutoSync(){
+    if (navigator.onLine && dataChanged && !syncInProgress) {
+      syncToFirestoreAll();
     }
+  }
 
-    // Lấy dữ liệu từ Firestore
-    const colRef = collection(db, `users/${user}/tasks`);
-    const snap = await getDocs(colRef);
-    const cloudTasks = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-
-    if (cloudTasks.length === 0) {
-      // Nếu Firestore trống → xoá local
-      localStorage.setItem(`tasks_${user}`, JSON.stringify([]));
-      tasks = [];
-      filterTasks();
-      showToast("🗑️ Firestore trống — dữ liệu local đã bị xoá!");
-      return;
-    }
-
-    // 🔎 Lấy dữ liệu local hiện có
-    const localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-    // 🧩 So sánh & hợp nhất (tránh trùng)
-    const mergedTasks = [...localTasks]; // bắt đầu với local
-    const isSame = (a, b) => {
-      return (
-        a.congviec?.trim().toLowerCase() === b.congviec?.trim().toLowerCase() &&
-        (a.ghichu?.trim().toLowerCase() || '') === (b.ghichu?.trim().toLowerCase() || '') &&
-        (a.ngaynhap || '') === (b.ngaynhap || '')
-      );
+  // Override localStorage.setItem to mark changes (non-destructive)
+  (function(){
+    const origSet = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function(k,v){
+      origSet(k,v);
+      if (k.startsWith('tasks_') || k === 'repairs' || k === 'notes' || k === 'noiDungGhiChu') {
+        dataChangedFlagSet();
+      }
+      return true;
     };
+  })();
 
-    for (const cloud of cloudTasks) {
-      const exists = mergedTasks.some(local => isSame(local, cloud));
-      if (!exists) mergedTasks.push(cloud);
+  // Core: delete doc then set doc for each user document
+  async function syncToFirestoreAll(){
+    if (!db) {
+      console.warn('Firestore not initialized');
+      return;
     }
+    if (syncInProgress) return;
+    syncInProgress = true;
+    tinyToast('🔄 Đồng bộ Firebase...');
 
-    // 💾 Ghi kết quả hợp nhất vào local
-    localStorage.setItem(`tasks_${user}`, JSON.stringify(mergedTasks));
-    tasks = mergedTasks;
-    filterTasks();
+    try {
+      // collect all users from localStorage keys tasks_*
+      const users = [];
+      for (let i=0;i<localStorage.length;i++){
+        const key = localStorage.key(i);
+        if (key && key.startsWith('tasks_')) {
+          users.push(key.replace('tasks_',''));
+        }
+      }
+      // make unique
+      const uniqUsers = Array.from(new Set(users));
+      for (const username of uniqUsers) {
+        const tasks = JSON.parse(localStorage.getItem('tasks_'+username) || '[]');
+        const repairs = JSON.parse(localStorage.getItem('repairs') || '[]');
+        // notes: prefer the big notes area 'noiDungGhiChu' if present, else 'notes' key
+        const notes = localStorage.getItem('noiDungGhiChu') || localStorage.getItem('notes') || '';
 
-    showToast(`✅ Đồng bộ xong, tổng ${mergedTasks.length} công việc (đã loại trùng).`);
-  } catch (err) {
-    console.error(err);
-    showToast("❌ Lỗi khi tải dữ liệu từ Firestore!");
+        // Delete existing doc (best-effort) then set new
+        try { await deleteDoc(doc(db, 'users', username)); } catch(e) { /* ignore */ }
+        await setDoc(doc(db, 'users', username), {
+          username,
+          tasks,
+          repairs,
+          notes,
+          lastSync: new Date().toISOString()
+        });
+      }
+
+      tinyToast('✅ Đồng bộ Firebase thành công');
+      dataChanged = false;
+    } catch (err) {
+      console.error('Sync error', err);
+      tinyToast('⚠️ Lỗi đồng bộ Firebase');
+    } finally {
+      syncInProgress = false;
+    }
   }
-}
+
+  // sync on online event and on load if online
+  window.addEventListener('online', tryAutoSync);
+  window.addEventListener('load', () => { tryAutoSync(); });
+
+  // expose for manual control if needed
+  window.syncToFirestoreAll = syncToFirestoreAll;
+  window.dataChangedFlagSet = dataChangedFlagSet;
 </script>
-
-
-
+<!-- End auto-sync module -->
 
 </body>
 </html>
