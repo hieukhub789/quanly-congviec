@@ -709,8 +709,6 @@
     <button id="exportBtn" onclick="showExportModal()">Xuất</button>
     <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
     <button id="syncBtn" onclick="syncFromFirebase()" style="background-color:#8e44ad; color:white;">🔄 Đồng bộ từ Cloud</button>
-
-
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
     <button onclick="showRepairModal()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
@@ -1029,7 +1027,7 @@ function filterTasks() {
   // - Không có dấu phẩy => AND (phải chứa tất cả từ)
   const isAndSearch = !keywordInput.includes(",");
 
-  const filteredTasks = tasks.filter(taskObj => {
+  const filteredTasks = (window.tasks || []).filter(taskObj => {
     const text = `${(taskObj.task || "").toLowerCase()} ${(taskObj.note || "").toLowerCase()}`;
 
     const taskMatch = keywords.length === 0
@@ -1099,12 +1097,12 @@ function filterTasks() {
 
     row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
       e.preventDefault();
-      togglePin(tasks.indexOf(taskObj));
+      togglePin(window.tasks.indexOf(taskObj));
     };
 
     row.onclick = (e) => {
       if (e.target.tagName.toLowerCase() === "button") return;
-      showDetails(tasks.indexOf(taskObj));
+      showDetails(window.tasks.indexOf(taskObj));
     };
 
     tableBody.appendChild(row);
@@ -1177,6 +1175,14 @@ function isLocalStorageFull(data) {
   tasks.unshift(newTask);
   saveToLocalStorage();
   filterTasks();
+  // 🔄 Cập nhật biến toàn cục để UI phản ánh ngay
+window.tasks = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
+
+// 🔁 Vẽ lại bảng
+if (typeof window.filterTasks === "function") {
+  window.filterTasks();
+}
+
 
   document.getElementById("taskInput").value = "";
   document.getElementById("noteInput").value = "";
@@ -1188,23 +1194,44 @@ function isLocalStorageFull(data) {
 
 
 
-   function deleteTask(index) {
-  if (currentUser === "all") {
+  function deleteTask(index) {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  if (!user || user === "all") {
     showToast("❌ Không thể xóa trong chế độ 'Tất cả'!");
     return;
   }
 
-  if (confirm("Bạn có chắc muốn xóa công việc này không?")) {
-    tasks.splice(index, 1);
+  if (!confirm("Bạn có chắc muốn xóa công việc này không?")) return;
 
-    // Lưu lại đúng kho người dùng hiện tại
-    localStorage.setItem(`tasks_${currentUser}`, JSON.stringify(tasks));
+  // 🔹 Lấy danh sách hiện tại đúng user
+  const tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-    closeModal("detailModal");
-    filterTasks();
-    showToast("🗑️ Đã xóa công việc thành công!");
+  if (!tasks[index]) {
+    showToast("⚠️ Không tìm thấy công việc để xóa!");
+    return;
   }
+
+  // 🔹 Xóa task theo index
+  tasks.splice(index, 1);
+
+  // 🔹 Lưu lại local
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(tasks));
+
+  // 🔹 Cập nhật toàn cục và refresh UI
+  window.tasks = tasks;
+
+  // 🔹 Đóng modal (nếu có)
+  const modal = document.getElementById("detailModal");
+  if (modal) modal.style.display = "none";
+
+  // 🔁 Cập nhật lại danh sách
+  if (typeof window.filterTasks === "function") window.filterTasks();
+
+  // ✅ Thông báo
+  showToast("🗑️ Đã xóa công việc thành công!");
 }
+
+
 
 
     function editTask(index) {
@@ -2403,7 +2430,11 @@ function changeUser() {
   localStorage.setItem("currentUser", currentUser);
   // Reset về trang đầu (nếu có phân trang)
   currentPage = 1;
+  // ✅ Gắn vào window để các file khác thấy
+  window.currentUser = select.value;
 
+  // Lưu vào localStorage
+  localStorage.setItem("currentUser", window.currentUser);
   // Cập nhật hiển thị
   filterTasks();
   updateUIForUser();
@@ -2425,6 +2456,11 @@ function changeUser() {
 
   showToast(`Đã chuyển sang: ${currentUser === "all" ? "Tất cả" : currentUser}`);
   loadUserTasks();
+  // 🔁 Tự động đồng bộ dữ liệu từ Firebase khi đổi user
+if (typeof window.syncFromFirebase === "function" && currentUser !== "all") {
+  window.syncFromFirebase();
+}
+
 
 }
 
@@ -2798,25 +2834,36 @@ function showSystemNotification(title, message, type = "info") {
   
 </script>
 <script type="module">
-  import { getFirestore, collection, getDocs } 
+  import { getFirestore, doc, getDoc } 
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  
-
-  // 🔄 Chỉ tải dữ liệu từ Firebase về Local, không ghi đè, chỉ thêm mới
+  // 🔄 Đồng bộ từ Firestore về Local
   window.syncFromFirebase = async function() {
-    const user = window.currentUser || "nhi"; // lấy người dùng hiện tại
-    const colRef = collection(db, "tasks_" + user);
+    const user = localStorage.getItem("currentUser") || window.currentUser || "nhi";
+    window.currentUser = user;
+    console.log("👤 Đồng bộ dữ liệu cho user:", user);
+
+    // 🔹 Truy cập document: users/{user}
+    const userDocRef = doc(window.db, "users", user);
+    console.log("📂 Truy cập Firestore document:", `users/${user}`);
 
     try {
-      // 🔹 Lấy dữ liệu trên Firestore
-      const snapshot = await getDocs(colRef);
-      const cloudTasks = snapshot.docs.map(doc => doc.data());
+      const docSnap = await getDoc(userDocRef);
 
-      // 🔹 Lấy dữ liệu local
+      if (!docSnap.exists()) {
+        tinyShowToast("⚠️ Không tìm thấy dữ liệu người dùng này trên Cloud!");
+        return;
+      }
+
+      // 🔹 Lấy mảng tasks trong document
+      const data = docSnap.data();
+      const cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
+      console.log("📥 Dữ liệu tải từ Firebase:", cloudTasks);
+
+      // 🔹 Lấy dữ liệu local hiện tại
       const localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-      // 🔹 Lọc dữ liệu mới chưa có trong local (so sánh task + note + date)
+      // 🔹 So sánh và gộp (merge)
       const merged = [...localTasks];
       let addedCount = 0;
 
@@ -2833,26 +2880,44 @@ function showSystemNotification(title, message, type = "info") {
         }
       });
 
-      // 🔹 Nếu có dữ liệu mới thì lưu lại
-      if (addedCount > 0) {
-        localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
-        window.tasks = merged;
-        if (typeof window.filterTasks === "function") window.filterTasks();
-      }
+      // 🔹 Cập nhật lại Local nếu có dữ liệu mới
+      // 🔹 Cập nhật lại LocalStorage (nếu có dữ liệu mới)
+if (addedCount > 0) {
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+  window.tasks = merged;
+} else {
+  // nếu không có dữ liệu mới, vẫn cần đồng bộ window.tasks từ local
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+}
 
-      // 🔹 Thông báo kết quả
-      tinyShowToast(
-        addedCount > 0
-          ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
-          : "☁️ Dữ liệu đã được cập nhật, không có gì mới."
-      );
+// ✅ Luôn cập nhật giao diện
+if (typeof window.filterTasks === "function") window.filterTasks();
+window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  // 🔹 Log kiểm tra
+  console.log("🧩 Kiểm tra window.tasks sau sync:", window.tasks);
+
+  // ✅ Luôn render lại danh sách
+  if (typeof window.filterTasks === "function") {
+    console.log("🔁 Gọi filterTasks() để cập nhật UI");
+    window.filterTasks();
+  } else {
+    console.warn("⚠️ Không tìm thấy hàm filterTasks!");
+  }
+
+tinyShowToast(
+  addedCount > 0
+    ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
+    : "☁️ Dữ liệu đã được cập nhật, không có gì mới."
+);
+
     } catch (err) {
       console.error(err);
       tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
     }
   };
 
-  // 🔔 Hàm hiển thị thông báo nhỏ
+  // 🔔 Thông báo nhỏ gọn
   window.tinyShowToast = function(msg) {
     const el = document.createElement("div");
     el.textContent = msg;
@@ -2872,6 +2937,10 @@ function showSystemNotification(title, message, type = "info") {
     setTimeout(() => el.remove(), 3500);
   };
 </script>
+
+
+
+
 
 <!-- End auto-sync module -->
 
