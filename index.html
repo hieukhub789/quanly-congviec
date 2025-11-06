@@ -993,12 +993,24 @@ function enableAddButton() {
       
     }
 function filterTasks() {
-  const keywordInput = document.getElementById("searchInput").value.toLowerCase();
-  const selectedStatus = document.getElementById("statusFilter").value;
-  const tableBody = document.querySelector("#taskTable tbody");
-  const startDateStr = document.getElementById("startDate").value;
-  const endDateStr = document.getElementById("endDate").value;
+  // === 0. Đồng bộ window.tasks từ localStorage (quan trọng) ===
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  const storedTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+  window.tasks = storedTasks;
 
+  // === 1. Lấy các input (an toàn nếu phần tử chưa tồn tại) ===
+  const keywordInputEl = document.getElementById("searchInput");
+  const statusFilterEl = document.getElementById("statusFilter");
+  const startDateEl = document.getElementById("startDate");
+  const endDateEl = document.getElementById("endDate");
+  const tableBody = document.querySelector("#taskTable tbody");
+
+  const keywordInput = (keywordInputEl?.value || "").toLowerCase();
+  const selectedStatus = (statusFilterEl?.value) || "";
+  const startDateStr = startDateEl?.value || "";
+  const endDateStr = endDateEl?.value || "";
+
+  if (!tableBody) return;
   tableBody.innerHTML = "";
 
   const statusPriority = {
@@ -1008,6 +1020,7 @@ function filterTasks() {
   };
 
   function parseDDMMYYYY(dateStr) {
+    if (!dateStr || !dateStr.includes("/")) return null;
     const parts = dateStr.split("/");
     const day = parts[0].padStart(2, "0");
     const month = parts[1].padStart(2, "0");
@@ -1018,24 +1031,22 @@ function filterTasks() {
   const startDate = startDateStr ? parseDDMMYYYY(startDateStr) : null;
   const endDate = endDateStr ? parseDDMMYYYY(endDateStr) : null;
 
-  // 🧠 Tách từ khóa (theo dấu phẩy hoặc khoảng trắng)
+  // Tách từ khóa
   const keywords = keywordInput
-    .split(/[,\s]+/) // tách theo dấu phẩy hoặc khoảng trắng
+    .split(/[,\s]+/)
     .filter(k => k.length > 0);
 
-  // 🧠 Xác định kiểu tìm kiếm tự động:
-  // - Có dấu phẩy => OR (ít nhất 1 từ)
-  // - Không có dấu phẩy => AND (phải chứa tất cả từ)
   const isAndSearch = !keywordInput.includes(",");
 
+  // Lọc từ window.tasks (đã đồng bộ ở trên)
   const filteredTasks = (window.tasks || []).filter(taskObj => {
     const text = `${(taskObj.task || "").toLowerCase()} ${(taskObj.note || "").toLowerCase()}`;
 
     const taskMatch = keywords.length === 0
       ? true
       : isAndSearch
-        ? keywords.every(word => text.includes(word))   // AND: tất cả từ khóa phải có
-        : keywords.some(word => text.includes(word));   // OR: ít nhất 1 từ khóa
+        ? keywords.every(word => text.includes(word))
+        : keywords.some(word => text.includes(word));
 
     const statusMatch =
       selectedStatus === "" ||
@@ -1053,7 +1064,7 @@ function filterTasks() {
     return taskMatch && statusMatch && dateMatch;
   });
 
-  //  Sắp xếp: ghim trước > trạng thái > ngày
+  // Sắp xếp: pinned > status > date
   filteredTasks.sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
@@ -1062,7 +1073,6 @@ function filterTasks() {
     const statusB = (b.status || "").trim();
     const priorityA = statusPriority[statusA] || 99;
     const priorityB = statusPriority[statusB] || 99;
-
     if (priorityA !== priorityB) return priorityA - priorityB;
 
     const dateA = a.date ? parseDDMMYYYY(a.date) : new Date(0);
@@ -1070,10 +1080,9 @@ function filterTasks() {
     return dateB - dateA;
   });
 
-  // 🧾 PHÂN TRANG
+  // Phân trang
   const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
   if (currentPage > totalPages) currentPage = totalPages || 1;
-
   const startIndex = (currentPage - 1) * tasksPerPage;
   const paginatedTasks = filteredTasks.slice(startIndex, startIndex + tasksPerPage);
 
@@ -1096,34 +1105,44 @@ function filterTasks() {
       <td>${taskObj.date || ""}</td>
     `;
 
+    // Tìm index thực của task trong window.tasks (an toàn hơn indexOf khi objects là cùng tham chiếu)
+    const realIndex = window.tasks.indexOf(taskObj);
+
     row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
       e.preventDefault();
-      togglePin(window.tasks.indexOf(taskObj));
+      if (typeof togglePin === "function") togglePin(realIndex);
     };
 
     row.onclick = (e) => {
       if (e.target.tagName.toLowerCase() === "button") return;
-      showDetails(window.tasks.indexOf(taskObj));
+      if (typeof showDetails === "function") showDetails(realIndex);
     };
 
     tableBody.appendChild(row);
   });
 
-  // 🔢 Cập nhật phân trang
-  document.getElementById("paginationInfo").textContent =
-    `Trang ${currentPage} / ${totalPages || 1}`;
+  // Cập nhật phân trang UI
+  const paginationInfoEl = document.getElementById("paginationInfo");
+  if (paginationInfoEl) paginationInfoEl.textContent = `Trang ${currentPage} / ${totalPages || 1}`;
 
-  document.getElementById("prevPageBtn").disabled = currentPage === 1;
-  document.getElementById("nextPageBtn").disabled = currentPage === totalPages || totalPages === 0;
+  const prevBtn = document.getElementById("prevPageBtn");
+  const nextBtn = document.getElementById("nextPageBtn");
+  if (prevBtn) prevBtn.disabled = currentPage === 1;
+  if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
 
-  // 📅 Cập nhật thông tin thống kê
-  document.getElementById("taskCount").textContent = `Tổng công việc: ${filteredTasks.length}`;
+  // Thống kê
+  const taskCountEl = document.getElementById("taskCount");
+  if (taskCountEl) taskCountEl.textContent = `Tổng công việc: ${filteredTasks.length}`;
   const completedCount = filteredTasks.filter(task => (task.status || "").toLowerCase().trim() === "hoàn thành").length;
-  document.getElementById("completedCount").textContent = `Hoàn thành: ${completedCount}`;
+  const completedCountEl = document.getElementById("completedCount");
+  if (completedCountEl) completedCountEl.textContent = `Hoàn thành: ${completedCount}`;
+
   const today = new Date();
   const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth()+1).padStart(2, '0')}/${today.getFullYear()}`;
-  document.getElementById("updateDate").textContent = `Ngày cập nhật: ${formattedDate}`;
+  const updateDateEl = document.getElementById("updateDate");
+  if (updateDateEl) updateDateEl.textContent = `Ngày cập nhật: ${formattedDate}`;
 }
+
 
 function togglePin(index) {
   tasks[index].pinned = !tasks[index].pinned;
@@ -1235,24 +1254,51 @@ if (typeof window.filterTasks === "function") {
 
 
 
-    function editTask(index) {
-      const taskObj = tasks[index];
-      const newTask = prompt("Sửa công việc:", taskObj.task);
-      if (newTask === null) return;
+   function editTask(index) {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  if (!user || user === "all") {
+    showToast("⚠️ Không thể sửa trong chế độ 'Tất cả'!");
+    return;
+  }
 
-      const newNote = prompt("Sửa ghi chú:", taskObj.note);
-      if (newNote === null) return;
+  // 🔹 Lấy task hiện tại từ bộ nhớ RAM
+  const taskObj = window.tasks[index];
+  if (!taskObj) {
+    showToast("⚠️ Không tìm thấy công việc để sửa!");
+    return;
+  }
 
-      tasks[index] = { 
-  task: newTask.trim(), 
-  note: newNote.trim(),
-  status: tasks[index].status // giữ nguyên trạng thái
-};
+  // 🔹 Prompt để nhập dữ liệu mới
+  const newTask = prompt("Sửa công việc:", taskObj.task);
+  if (newTask === null) return;
 
-      saveToLocalStorage();
-      closeModal('detailModal');
-      filterTasks();
-    }
+  const newNote = prompt("Sửa ghi chú:", taskObj.note);
+  if (newNote === null) return;
+
+  // 🔹 Cập nhật lại trong biến RAM
+  window.tasks[index] = {
+    ...taskObj,
+    task: newTask.trim(),
+    note: newNote.trim(),
+  };
+
+  // 🔹 Lưu lại localStorage
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+
+  // 🔹 Cập nhật lại biến toàn cục từ localStorage (đảm bảo đồng bộ)
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  // 🔹 Gọi lại UI render
+  if (typeof window.filterTasks === "function") window.filterTasks();
+
+  // 🔹 Đóng modal (nếu có)
+  closeModal("detailModal");
+
+  // 🔹 Toast báo thành công
+  showToast("✏️ Đã cập nhật công việc!");
+}
+
+
 
     function showDetails(index) {
   currentDetailIndex = index;
