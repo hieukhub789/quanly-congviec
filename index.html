@@ -709,6 +709,7 @@
     <button id="exportBtn" onclick="showExportModal()">Xuất</button>
     <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
     <button id="syncBtn" onclick="syncFromFirebase()" style="background-color:#8e44ad; color:white;">🔄 Đồng bộ từ Cloud</button>
+    <button onclick="openModal('addUserModal')"  style="background: linear-gradient(135deg, #5dade2, #85c1e9); color: #050101;font-weight: 600; ">+ Người dùng</button>
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
     <button onclick="showRepairModal()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
@@ -2937,12 +2938,15 @@ tinyShowToast(
     setTimeout(() => el.remove(), 3500);
   };
 </script>
+<!-- thêm user xoá user -->
 <script type="module">
 import { 
-  collection, getDocs, setDoc, doc, deleteDoc 
+  collection, getDocs, setDoc, doc, deleteDoc, getDoc 
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 🧩 Tạo user mặc định nếu Firebase trống
+/* ======================================================
+   🔹 1. Tạo user mặc định nếu Firebase trống
+====================================================== */
 async function initDefaultUsers() {
   const usersCol = collection(window.db, "users");
   const snapshot = await getDocs(usersCol);
@@ -2966,8 +2970,10 @@ async function initDefaultUsers() {
   }
 }
 
-// 🧩 Tải danh sách user từ Firebase
-async function loadUsersFromFirebase() {
+/* ======================================================
+   🔹 2. Tải danh sách user từ Firebase
+====================================================== */
+async function loadUsersFromFirebase(selectAfterLoad = null) {
   const userSelect = document.getElementById("userSelect");
   if (!userSelect) return;
 
@@ -2985,6 +2991,7 @@ async function loadUsersFromFirebase() {
 
     users.sort((a, b) => a.localeCompare(b, "vi"));
 
+    // Tạo option cho từng user
     users.forEach((name) => {
       const opt = document.createElement("option");
       opt.value = name.trim();
@@ -2992,13 +2999,14 @@ async function loadUsersFromFirebase() {
       userSelect.appendChild(opt);
     });
 
+    // Thêm option "Tất cả"
     const allOpt = document.createElement("option");
     allOpt.value = "all";
     allOpt.textContent = "Tất cả";
     userSelect.appendChild(allOpt);
 
-    // chọn user cũ nếu có
-    const lastUser = localStorage.getItem("currentUser") || users[0] || "all";
+    // Chọn user phù hợp sau khi load
+    const lastUser = selectAfterLoad || localStorage.getItem("currentUser") || users[0] || "all";
     userSelect.value = lastUser;
 
     if (typeof window.changeUser === "function") {
@@ -3011,12 +3019,14 @@ async function loadUsersFromFirebase() {
   }
 }
 
-// 🧩 Thêm user mới (và lưu Firebase)
+/* ======================================================
+   🔹 3. Thêm user mới
+====================================================== */
 window.addNewUser = async function () {
   const input = document.getElementById("newUserName");
   const newName = input.value.trim();
   if (!newName) {
-    alert("Vui lòng nhập tên người dùng!");
+    alert("⚠️ Vui lòng nhập tên người dùng!");
     return;
   }
 
@@ -3024,6 +3034,16 @@ window.addNewUser = async function () {
   const newDocRef = doc(usersCol, newName);
 
   try {
+    // kiểm tra trùng
+    const existing = await getDoc(newDocRef);
+    if (existing.exists()) {
+      showToast(`⚠️ User "${newName}" đã tồn tại!`);
+      input.value = "";
+      closeModal("addUserModal");
+      return;
+    }
+
+    // tạo mới
     await setDoc(newDocRef, {
       username: newName,
       tasks: [],
@@ -3036,8 +3056,8 @@ window.addNewUser = async function () {
     input.value = "";
     closeModal("addUserModal");
 
-    // tải lại danh sách user
-    await loadUsersFromFirebase();
+    // tải lại danh sách user và chọn user mới
+    await loadUsersFromFirebase(newName);
 
   } catch (err) {
     console.error("❌ Lỗi khi thêm user:", err);
@@ -3045,12 +3065,14 @@ window.addNewUser = async function () {
   }
 };
 
-// 🧩 Xóa user hiện tại khỏi Firebase
+/* ======================================================
+   🔹 4. Xóa user hiện tại
+====================================================== */
 window.deleteCurrentUser = async function () {
   const userSelect = document.getElementById("userSelect");
   const currentUser = userSelect.value;
 
-  if (currentUser === "all") {
+  if (!currentUser || currentUser === "all") {
     showToast("⚠️ Không thể xoá chế độ 'Tất cả'");
     return;
   }
@@ -3064,19 +3086,36 @@ window.deleteCurrentUser = async function () {
     showToast(`🗑️ Đã xoá user "${currentUser}" khỏi Firebase.`);
     closeModal("addUserModal");
 
+    // tải lại danh sách user, chọn user đầu tiên
     await loadUsersFromFirebase();
+
   } catch (err) {
     console.error("❌ Lỗi khi xoá user:", err);
     showToast("❌ Không thể xoá user này!");
   }
 };
 
-// 🧩 Chạy khi trang load
+/* ======================================================
+   🔹 5. Tự động khởi động khi mở trang
+====================================================== */
 window.addEventListener("DOMContentLoaded", async () => {
   await initDefaultUsers();
   await loadUsersFromFirebase();
 });
 </script>
+<script>
+window.openModal = function(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = "block";
+};
+
+window.closeModal = function(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = "none";
+};
+</script>
+
+
 <!-- End auto-sync module -->
 </body>
 </html>
