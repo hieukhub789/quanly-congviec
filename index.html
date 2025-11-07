@@ -2867,42 +2867,75 @@ function showSystemNotification(title, message, type = "info") {
     syncInProgress = true;
     tinyToast('🔄 Đồng bộ Firebase...');
 
-    try {
-      // collect all users from localStorage keys tasks_*
-      const users = [];
-      for (let i=0;i<localStorage.length;i++){
-        const key = localStorage.key(i);
-        if (key && key.startsWith('tasks_')) {
-          users.push(key.replace('tasks_',''));
-        }
-      }
-      // make unique
-      const uniqUsers = Array.from(new Set(users));
-      for (const username of uniqUsers) {
-        const tasks = JSON.parse(localStorage.getItem('tasks_'+username) || '[]');
-        const repairs = JSON.parse(localStorage.getItem('repairs') || '[]');
-        // notes: prefer the big notes area 'noiDungGhiChu' if present, else 'notes' key
-        const notes = localStorage.getItem('noiDungGhiChu') || localStorage.getItem('notes') || '';
+   try {
+  // collect all users from localStorage keys tasks_*
+  const users = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("tasks_")) {
+      users.push(key.replace("tasks_", ""));
+    }
+  }
 
-        // Delete existing doc (best-effort) then set new
-        try { await deleteDoc(doc(db, 'users', username)); } catch(e) { /* ignore */ }
-        await setDoc(doc(db, 'users', username), {
+  // make unique
+  const uniqUsers = Array.from(new Set(users));
+
+  // 🔄 Đồng bộ từng user an toàn (merge, không ghi đè ghi chú)
+  for (const username of uniqUsers) {
+    const tasks = JSON.parse(localStorage.getItem("tasks_" + username) || "[]");
+    const repairs = JSON.parse(localStorage.getItem("repairs") || "[]");
+
+    // 🔹 Lấy ghi chú theo user (ưu tiên per-user)
+    const perUserNoteKey = `ghiChu_${username}`;
+    const localNote =
+      localStorage.getItem(perUserNoteKey) ||
+      localStorage.getItem("noiDungGhiChu") ||
+      localStorage.getItem("notes") ||
+      "";
+
+    const userRef = doc(db, "users", username);
+    try {
+      const snap = await getDoc(userRef);
+      const cloudData = snap.exists() ? snap.data() : {};
+
+      // 🔸 Chọn ghi chú cuối cùng hợp lý nhất
+      let finalNote = cloudData.notes || "";
+      if (localNote && localNote.trim() !== "") {
+        finalNote = localNote; // Local có nội dung thì ưu tiên
+      } else if (!localNote && cloudData.notes) {
+        // Local trống, Cloud có → giữ Cloud và cập nhật local
+        localStorage.setItem(perUserNoteKey, cloudData.notes);
+        finalNote = cloudData.notes;
+      }
+
+      // 🔸 Ghi dữ liệu hợp nhất lên Cloud (merge an toàn, KHÔNG delete)
+      await setDoc(
+        userRef,
+        {
           username,
           tasks,
           repairs,
-          notes,
-          lastSync: new Date().toISOString()
-        });
-      }
+          notes: finalNote,
+          lastSync: new Date().toISOString(),
+        },
+        { merge: true }
+      );
 
-      tinyToast('✅ Đồng bộ Firebase thành công');
-      dataChanged = false;
-    } catch (err) {
-      console.error('Sync error', err);
-      tinyToast('⚠️ Lỗi đồng bộ Firebase');
-    } finally {
-      syncInProgress = false;
+      console.log(`✅ Đồng bộ user ${username}: note="${finalNote}"`);
+    } catch (e) {
+      console.warn("⚠️ Lỗi đồng bộ user", username, e);
     }
+  }
+
+  tinyToast("✅ Đồng bộ Firebase thành công");
+  dataChanged = false;
+} catch (err) {
+  console.error("Sync error", err);
+  tinyToast("⚠️ Lỗi đồng bộ Firebase");
+} finally {
+  syncInProgress = false;
+}
+
   }
 
   // sync on online event and on load if online
