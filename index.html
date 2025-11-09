@@ -1300,23 +1300,41 @@ if (typeof window.filterTasks === "function") {
 
 
 
-    function showDetails(index) {
-  currentDetailIndex = index;
-  const task = tasks[index];
+  function showDetails(index) {
+  // 🧱 Kiểm tra dữ liệu có sẵn không
+  if (!Array.isArray(window.tasks) || window.tasks.length === 0) {
+    console.warn("⚠️ showDetails: Dữ liệu task chưa sẵn sàng hoặc trống!");
+    showToast("⚠️ Chưa có dữ liệu công việc để hiển thị.");
+    return;
+  }
 
+  // 🧱 Kiểm tra chỉ số hợp lệ
+  if (index == null || index < 0 || index >= window.tasks.length) {
+    console.warn("⚠️ showDetails: Chỉ số không hợp lệ:", index);
+    showToast("⚠️ Không tìm thấy công việc này.");
+    return;
+  }
+
+  const task = window.tasks[index];
+  if (!task || typeof task.task === "undefined") {
+    console.warn("⚠️ showDetails: task undefined tại index", index);
+    showToast("⚠️ Dữ liệu công việc không hợp lệ.");
+    return;
+  }
+
+  // ✅ Gán thông tin vào modal
   document.getElementById("modalStt").innerText = index + 1;
-  document.getElementById("modalTask").innerText = task.task;
-  document.getElementById("modalNote").innerText = task.note;
+  document.getElementById("modalTask").innerText = task.task || "";
+  document.getElementById("modalNote").innerText = task.note || "";
   document.getElementById("modalDate").value = task.date || "";
 
-
-  // Gán trạng thái vào dropdown
+  // ✅ Gán trạng thái vào dropdown
   const modalStatus = document.getElementById("modalStatus");
   const status = (task.status || "").trim().toLowerCase();
   const validStatuses = ["chưa làm", "đang làm", "hoàn thành"];
   modalStatus.value = validStatuses.includes(status) ? capitalize(status) : "Chưa làm";
 
-  // Reset chế độ chỉnh sửa
+  // 🔧 Reset chế độ chỉnh sửa
   const taskDiv = document.getElementById("modalTask");
   const noteDiv = document.getElementById("modalNote");
   const editBtn = document.getElementById("editSaveBtn");
@@ -1329,6 +1347,7 @@ if (typeof window.filterTasks === "function") {
   editBtn.textContent = "Sửa";
   isEditing = false;
 
+  // ✅ Mở modal chi tiết
   document.getElementById("detailModal").style.display = "block";
 }
 
