@@ -998,30 +998,20 @@ function filterTasks() {
   const storedTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
   window.tasks = storedTasks;
 
-  // 🧱 Nếu chưa có dữ liệu => reset bảng luôn
-  const tableBody = document.querySelector("#taskTable tbody");
-  if (!Array.isArray(window.tasks)) window.tasks = [];
-  if (!tableBody) return;
-  tableBody.innerHTML = "";
-
-  // 🧱 Nếu chưa có dữ liệu thì hiển thị dòng rỗng thay vì lỗi
-  if (window.tasks.length === 0) {
-    const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="5" style="text-align:center; color:black;">(Không có công việc nào)</td>`;
-    tableBody.appendChild(row);
-    return;
-  }
-
   // === 1. Lấy các input (an toàn nếu phần tử chưa tồn tại) ===
   const keywordInputEl = document.getElementById("searchInput");
   const statusFilterEl = document.getElementById("statusFilter");
   const startDateEl = document.getElementById("startDate");
   const endDateEl = document.getElementById("endDate");
+  const tableBody = document.querySelector("#taskTable tbody");
 
   const keywordInput = (keywordInputEl?.value || "").toLowerCase();
   const selectedStatus = (statusFilterEl?.value) || "";
   const startDateStr = startDateEl?.value || "";
   const endDateStr = endDateEl?.value || "";
+
+  if (!tableBody) return;
+  tableBody.innerHTML = "";
 
   const statusPriority = {
     "Đang làm": 1,
@@ -1031,20 +1021,27 @@ function filterTasks() {
 
   function parseDDMMYYYY(dateStr) {
     if (!dateStr || !dateStr.includes("/")) return null;
-    const [d, m, y] = dateStr.split("/");
-    return new Date(`${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`);
+    const parts = dateStr.split("/");
+    const day = parts[0].padStart(2, "0");
+    const month = parts[1].padStart(2, "0");
+    const year = parts[2];
+    return new Date(`${year}-${month}-${day}`);
   }
 
   const startDate = startDateStr ? parseDDMMYYYY(startDateStr) : null;
   const endDate = endDateStr ? parseDDMMYYYY(endDateStr) : null;
 
-  // 🧠 Tách và xử lý từ khóa
-  const keywords = keywordInput.split(/[,\s]+/).filter(k => k.length > 0);
+  // Tách từ khóa
+  const keywords = keywordInput
+    .split(/[,\s]+/)
+    .filter(k => k.length > 0);
+
   const isAndSearch = !keywordInput.includes(",");
 
-  // === 2. Lọc task ===
-  const filteredTasks = window.tasks.filter(taskObj => {
+  // Lọc từ window.tasks (đã đồng bộ ở trên)
+  const filteredTasks = (window.tasks || []).filter(taskObj => {
     const text = `${(taskObj.task || "").toLowerCase()} ${(taskObj.note || "").toLowerCase()}`;
+
     const taskMatch = keywords.length === 0
       ? true
       : isAndSearch
@@ -1055,9 +1052,11 @@ function filterTasks() {
       selectedStatus === "" ||
       (taskObj.status || "").trim().toLowerCase() === selectedStatus.toLowerCase();
 
+    const taskDateStr = taskObj.date || "";
     let dateMatch = true;
-    if ((startDate || endDate) && taskObj.date?.includes("/")) {
-      const taskDate = parseDDMMYYYY(taskObj.date);
+
+    if ((startDate || endDate) && taskDateStr.includes("/")) {
+      const taskDate = parseDDMMYYYY(taskDateStr);
       if (startDate && taskDate < startDate) dateMatch = false;
       if (endDate && taskDate > endDate) dateMatch = false;
     }
@@ -1065,13 +1064,15 @@ function filterTasks() {
     return taskMatch && statusMatch && dateMatch;
   });
 
-  // === 3. Sắp xếp pinned > status > date ===
+  // Sắp xếp: pinned > status > date
   filteredTasks.sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
 
-    const priorityA = statusPriority[a.status?.trim()] || 99;
-    const priorityB = statusPriority[b.status?.trim()] || 99;
+    const statusA = (a.status || "").trim();
+    const statusB = (b.status || "").trim();
+    const priorityA = statusPriority[statusA] || 99;
+    const priorityB = statusPriority[statusB] || 99;
     if (priorityA !== priorityB) return priorityA - priorityB;
 
     const dateA = a.date ? parseDDMMYYYY(a.date) : new Date(0);
@@ -1079,7 +1080,7 @@ function filterTasks() {
     return dateB - dateA;
   });
 
-  // === 4. Phân trang ===
+  // Phân trang
   const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
   if (currentPage > totalPages) currentPage = totalPages || 1;
   const startIndex = (currentPage - 1) * tasksPerPage;
@@ -1088,47 +1089,58 @@ function filterTasks() {
   paginatedTasks.forEach((taskObj, idx) => {
     const row = document.createElement("tr");
 
-    const color = (() => {
-      switch ((taskObj.status || "").trim().toLowerCase()) {
-        case "hoàn thành": return "green";
-        case "chưa làm": return "red";
-        case "đang làm": return "#000000";
-        default: return "black";
-      }
-    })();
+    let color = "";
+    switch ((taskObj.status || "").trim().toLowerCase()) {
+      case "hoàn thành": color = "green"; break;
+      case "chưa làm": color = "red"; break;
+      case "đang làm": color = "#000000"; break;
+      default: color = "black";
+    }
 
     row.innerHTML = `
       <td>${startIndex + idx + 1}</td>
       <td>${taskObj.pinned ? "📌 " : ""}${taskObj.task}</td>
       <td>${taskObj.note}</td>
-      <td style="color:${color};font-weight:bold;">${taskObj.status || ""}</td>
+      <td style="color: ${color}; font-weight: bold;">${taskObj.status || ""}</td>
       <td>${taskObj.date || ""}</td>
     `;
 
+    // Tìm index thực của task trong window.tasks (an toàn hơn indexOf khi objects là cùng tham chiếu)
     const realIndex = window.tasks.indexOf(taskObj);
-    row.querySelector("td:nth-child(2)").oncontextmenu = e => {
+
+    row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
       e.preventDefault();
       if (typeof togglePin === "function") togglePin(realIndex);
     };
-    row.onclick = e => {
-      if (e.target.tagName.toLowerCase() !== "button" && typeof showDetails === "function") {
-        showDetails(realIndex);
-      }
+
+    row.onclick = (e) => {
+      if (e.target.tagName.toLowerCase() === "button") return;
+      if (typeof showDetails === "function") showDetails(realIndex);
     };
 
     tableBody.appendChild(row);
   });
 
-  // === 5. Cập nhật UI phụ ===
-  document.getElementById("paginationInfo").textContent = `Trang ${currentPage} / ${totalPages || 1}`;
-  document.getElementById("prevPageBtn").disabled = currentPage === 1;
-  document.getElementById("nextPageBtn").disabled = currentPage === totalPages || totalPages === 0;
+  // Cập nhật phân trang UI
+  const paginationInfoEl = document.getElementById("paginationInfo");
+  if (paginationInfoEl) paginationInfoEl.textContent = `Trang ${currentPage} / ${totalPages || 1}`;
 
-  document.getElementById("taskCount").textContent = `Tổng công việc: ${filteredTasks.length}`;
-  const completedCount = filteredTasks.filter(t => (t.status || "").toLowerCase().trim() === "hoàn thành").length;
-  document.getElementById("completedCount").textContent = `Hoàn thành: ${completedCount}`;
+  const prevBtn = document.getElementById("prevPageBtn");
+  const nextBtn = document.getElementById("nextPageBtn");
+  if (prevBtn) prevBtn.disabled = currentPage === 1;
+  if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+
+  // Thống kê
+  const taskCountEl = document.getElementById("taskCount");
+  if (taskCountEl) taskCountEl.textContent = `Tổng công việc: ${filteredTasks.length}`;
+  const completedCount = filteredTasks.filter(task => (task.status || "").toLowerCase().trim() === "hoàn thành").length;
+  const completedCountEl = document.getElementById("completedCount");
+  if (completedCountEl) completedCountEl.textContent = `Hoàn thành: ${completedCount}`;
+
   const today = new Date();
-  document.getElementById("updateDate").textContent = `Ngày cập nhật: ${today.toLocaleDateString("vi-VN")}`;
+  const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth()+1).padStart(2, '0')}/${today.getFullYear()}`;
+  const updateDateEl = document.getElementById("updateDate");
+  if (updateDateEl) updateDateEl.textContent = `Ngày cập nhật: ${formattedDate}`;
 }
 
 
@@ -1288,41 +1300,23 @@ if (typeof window.filterTasks === "function") {
 
 
 
-  function showDetails(index) {
-  // 🧱 Kiểm tra dữ liệu có sẵn không
-  if (!Array.isArray(window.tasks) || window.tasks.length === 0) {
-    console.warn("⚠️ showDetails: Dữ liệu task chưa sẵn sàng hoặc trống!");
-    showToast("⚠️ Chưa có dữ liệu công việc để hiển thị.");
-    return;
-  }
+    function showDetails(index) {
+  currentDetailIndex = index;
+  const task = tasks[index];
 
-  // 🧱 Kiểm tra chỉ số hợp lệ
-  if (index == null || index < 0 || index >= window.tasks.length) {
-    console.warn("⚠️ showDetails: Chỉ số không hợp lệ:", index);
-    showToast("⚠️ Không tìm thấy công việc này.");
-    return;
-  }
-
-  const task = window.tasks[index];
-  if (!task || typeof task.task === "undefined") {
-    console.warn("⚠️ showDetails: task undefined tại index", index);
-    showToast("⚠️ Dữ liệu công việc không hợp lệ.");
-    return;
-  }
-
-  // ✅ Gán thông tin vào modal
   document.getElementById("modalStt").innerText = index + 1;
-  document.getElementById("modalTask").innerText = task.task || "";
-  document.getElementById("modalNote").innerText = task.note || "";
+  document.getElementById("modalTask").innerText = task.task;
+  document.getElementById("modalNote").innerText = task.note;
   document.getElementById("modalDate").value = task.date || "";
 
-  // ✅ Gán trạng thái vào dropdown
+
+  // Gán trạng thái vào dropdown
   const modalStatus = document.getElementById("modalStatus");
   const status = (task.status || "").trim().toLowerCase();
   const validStatuses = ["chưa làm", "đang làm", "hoàn thành"];
   modalStatus.value = validStatuses.includes(status) ? capitalize(status) : "Chưa làm";
 
-  // 🔧 Reset chế độ chỉnh sửa
+  // Reset chế độ chỉnh sửa
   const taskDiv = document.getElementById("modalTask");
   const noteDiv = document.getElementById("modalNote");
   const editBtn = document.getElementById("editSaveBtn");
@@ -1335,7 +1329,6 @@ if (typeof window.filterTasks === "function") {
   editBtn.textContent = "Sửa";
   isEditing = false;
 
-  // ✅ Mở modal chi tiết
   document.getElementById("detailModal").style.display = "block";
 }
 
