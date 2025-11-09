@@ -1875,12 +1875,20 @@ function showWeatherModal() {
             const wind = data.wind.speed;
             const description = data.weather[0].description;
 
+            // 🧩 Kiểm tra dữ liệu mưa
+            const rain = data.rain ? (data.rain["1h"] || data.rain["3h"] || 0) : 0;
+            const rainText = rain > 0 
+              ? `🌧️ Có mưa (${rain} mm/h)` 
+              : "🌤️ Không mưa";
+
+            // 🪄 Hiển thị kết quả
             content.innerHTML = `
               <p><strong>📍 Địa điểm:</strong> ${name}, ${country}</p>
               <p><strong>🌡️ Nhiệt độ:</strong> ${temp}°C</p>
               <p><strong>💧 Độ ẩm:</strong> ${humidity}%</p>
               <p><strong>💨 Gió:</strong> ${wind} m/s</p>
               <p><strong>🌥️ Trạng thái:</strong> ${description}</p>
+              <p><strong>🌧️ Mưa:</strong> ${rainText}</p>
             `;
           })
           .catch(err => {
@@ -1897,6 +1905,7 @@ function showWeatherModal() {
     content.innerHTML = "Trình duyệt của bạn không hỗ trợ định vị.";
   }
 }
+
 
 function closeWeatherModal() {
   document.getElementById("weatherModal").style.display = "none";
