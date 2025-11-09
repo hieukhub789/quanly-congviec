@@ -997,6 +997,7 @@ function filterTasks() {
   const user = window.currentUser || localStorage.getItem("currentUser");
   const storedTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
   window.tasks = storedTasks;
+  
 
   // === 1. Lấy các input (an toàn nếu phần tử chưa tồn tại) ===
   const keywordInputEl = document.getElementById("searchInput");
@@ -1119,7 +1120,16 @@ function filterTasks() {
     };
 
     tableBody.appendChild(row);
+     
   });
+  if (filteredTasks.length === 0) {
+    const emptyRow = document.createElement("tr");
+    emptyRow.innerHTML = `
+      <td colspan="5" style="text-align:center; color: black; font-style: italic;">
+        (Không có công việc nào)
+      </td>`;
+    tableBody.appendChild(emptyRow);
+  }
 
   // Cập nhật phân trang UI
   const paginationInfoEl = document.getElementById("paginationInfo");
