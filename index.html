@@ -1007,7 +1007,7 @@ function filterTasks() {
   // 🧱 Nếu chưa có dữ liệu thì hiển thị dòng rỗng thay vì lỗi
   if (window.tasks.length === 0) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="5" style="text-align:center; color:gray;">(Không có công việc nào)</td>`;
+    row.innerHTML = `<td colspan="5" style="text-align:center; color:#0000;">(Không có công việc nào)</td>`;
     tableBody.appendChild(row);
     return;
   }
