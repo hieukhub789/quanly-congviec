@@ -2926,22 +2926,13 @@ function showSystemNotification(title, message, type = "info") {
         localStorage.setItem(perUserNoteKey, cloudData.notes);
         finalNote = cloudData.notes;
       }
-       // 🔁 Gộp tasks — Cloud giữ nguyên, chỉ thêm cái mới
-      const mergedTasks = Array.isArray(cloudData.tasks) ? [...cloudData.tasks] : [];
-      tasks.forEach((t) => {   // ✅ dùng "tasks" thay vì "localTasks"
-      const exists = mergedTasks.some(
-        (ct) => ct.task === t.task && (ct.note || "") === (t.note || "") && ct.date === t.date
-         );
-        if (!exists) mergedTasks.push(t);
-      });
-
 
       // 🔸 Ghi dữ liệu hợp nhất lên Cloud (merge an toàn, KHÔNG delete)
       await setDoc(
         userRef,
         {
           username,
-          tasks: mergedTasks,
+          tasks,
           repairs,
           notes: finalNote,
           lastSync: new Date().toISOString(),
