@@ -1974,20 +1974,13 @@ chiphiInput.addEventListener("input", function (e) {
 });
 
 
-async function showRepairModal() {
-  // 🔄 auto sync từ Cloud trước khi mở modal
-  await syncRepairFromCloud();  
-
-  // Sau khi đã merge + cập nhật local → mở modal
+function showRepairModal() {
   document.getElementById("repairModal").style.display = "block";
-
-  // Nếu đang thêm mới (không chỉnh sửa mục cũ)
   if (editingRepairIndex === -1) {
     repairPage = 1;
-    renderRepairTable();
+    renderRepairTable(); // chỉ khi thêm mới
   }
 }
-
 
 function closeRepairModal() {
   document.getElementById("repairModal").style.display = "none";
@@ -3259,54 +3252,6 @@ window.closeModal = function(id) {
   const el = document.getElementById(id);
   if (el) el.style.display = "none";
 };
-</script>
-<script type="module">
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-window.syncRepairFromCloud = async function () {
-  const user = window.currentUser || localStorage.getItem("currentUser") || "nhi";
-
-  try {
-    const userDocRef = doc(db, "users", user);
-    const userSnap = await getDoc(userDocRef);
-
-    // Dữ liệu local hiện tại
-    const localRepairs = JSON.parse(localStorage.getItem(`repairs_${user}`) || "[]");
-
-    let cloudRepairs = [];
-
-    if (userSnap.exists()) {
-      cloudRepairs = userSnap.data().repairs || [];
-    }
-
-    // 🔄 MERGE local + cloud
-    const merged = [...localRepairs];
-
-    cloudRepairs.forEach(item => {
-      const exists = merged.some(
-        x =>
-          x.thoigian === item.thoigian &&
-          x.phutung === item.phutung &&
-          x.chiphi === item.chiphi &&
-          x.diadiem === item.diadiem
-      );
-      if (!exists) merged.push(item);
-    });
-
-    // Lưu bản merged vào local
-    localStorage.setItem(`repairs_${user}`, JSON.stringify(merged));
-
-    // Cập nhật RAM + UI của bạn
-    window.repairList = merged;
-    renderRepairTable();
-
-  } catch (err) {
-    console.error("Lỗi sync sửa xe:", err);
-    showToast("❌ Lỗi đồng bộ sửa xe từ Cloud");
-  }
-};
-
-
 </script>
 
 
