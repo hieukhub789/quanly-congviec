@@ -1983,13 +1983,36 @@ async function showRepairModal() {
     localStorage.getItem("currentUser") ||
     "default";
 
-  const mergedRepairs = await window.syncRepairFromCloud(username);
-  repairs = mergedRepairs || [];
+  // Lấy dữ liệu Cloud
+  let cloudRepairs = [];
+  if (typeof window.syncRepairFromCloud === "function") {
+    cloudRepairs = await window.syncRepairFromCloud(username) || [];
+  }
+
+  // Lấy dữ liệu Local
+  let localRepairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
+
+  // Merge Cloud vào Local, không ghi đè dữ liệu local
+  if (!localRepairs.length) {
+    // Local rỗng → Cloud làm chủ
+    repairs = cloudRepairs;
+  } else {
+    // Merge: chỉ thêm những item chưa có trong local
+    const existingKeys = new Set(localRepairs.map(r => `${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`));
+    const newFromCloud = cloudRepairs.filter(r => !existingKeys.has(`${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`));
+    repairs = localRepairs.concat(newFromCloud);
+  }
+
+  // Cập nhật localStorage để lần mở tiếp theo đã có dữ liệu merged
+  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
 
   repairPage = 1;
   renderRepairTable();
+
+  console.log("REPAIRS sau merge:", repairs);
 }
 window.showRepairModal = showRepairModal;
+
 
 function closeRepairModal() {
   document.getElementById("repairModal").style.display = "none";
