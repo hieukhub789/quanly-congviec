@@ -1918,6 +1918,9 @@ document.addEventListener("keydown", function (event) {
 });
 
 </script>
+
+
+
 <script>
 let editingRepairIndex = -1;
 let currentEditingIndex = -1;
@@ -1974,63 +1977,58 @@ chiphiInput.addEventListener("input", function (e) {
 });
 
 
-function showRepairModal() {
+async function showRepairModal() {
   document.getElementById("repairModal").style.display = "block";
-  if (editingRepairIndex === -1) {
-    repairPage = 1;
-    renderRepairTable(); // chỉ khi thêm mới
-  }
+
+  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+
+  // Sync cloud → local
+  const mergedRepairs = await window.syncRepairFromCloud(username);
+
+  // 🔹 Gán dữ liệu cho biến UI
+  repairs = mergedRepairs || [];
+
+  repairPage = 1;
+
+  // Render table sau khi có dữ liệu
+  renderRepairTable();
+
+  console.log("REPAIRS sau merge:", repairs);
 }
+
+
+window.showRepairModal = showRepairModal;
+
+
 
 function closeRepairModal() {
   document.getElementById("repairModal").style.display = "none";
 }
 
 function addRepairRow() {
+  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+
   const phutung = document.getElementById("phutungInput").value.trim();
   const diadiem = document.getElementById("diadiemInput").value.trim();
   const thoigian = document.getElementById("thoigianInput").value.trim();
   const chiphi = document.getElementById("chiphiInput").value.trim();
 
-  function isValidDateFormat(dateStr) {
-  const regex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
-  return regex.test(dateStr);
-  }
-
-
-  if (!phutung || !diadiem || !thoigian || !chiphi) {
-    alert("Vui lòng nhập đầy đủ thông tin!");
-    return;
-  }
-  if (!isValidDateFormat(thoigian)) {
-  alert("Vui lòng nhập đúng định dạng ngày: dd/mm/yyyy");
-  return;
-  } 
+  const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
+  if (!phutung || !diadiem || !thoigian || !chiphi) return alert("Vui lòng nhập đầy đủ thông tin!");
+  if (!dateRegex.test(thoigian)) return alert("Ngày sai định dạng dd/mm/yyyy!");
 
   const parsedChiPhi = parseInt(chiphi.replace(/\./g, ""));
 
-if (editingRepairIndex >= 0) {
-  // SỬA
-  repairs[editingRepairIndex] = {
-    phutung,
-    diadiem,
-    thoigian,
-    chiphi: parsedChiPhi
-  };
-  showToast("✏️ Đã sửa thông tin! ");
-  editingRepairIndex = -1;
-} else {
-  // THÊM MỚI
-  repairs.unshift({
-    phutung,
-    diadiem,
-    thoigian,
-    chiphi: parsedChiPhi
-  });
-  repairPage = 1;
-  showToast("✅ Đã thêm mới thông tin!");
-}
-
+  if (editingRepairIndex >= 0) {
+    // Sửa
+    repairs[editingRepairIndex] = { phutung, diadiem, thoigian, chiphi: parsedChiPhi };
+    showToast("✏️ Đã sửa thông tin!");
+    editingRepairIndex = -1;
+  } else {
+    // Thêm mới
+    repairs.unshift({ phutung, diadiem, thoigian, chiphi: parsedChiPhi });
+    showToast("✅ Đã thêm mới thông tin!");
+  }
 
   saveRepairs();
   repairPage = 1;
@@ -2047,14 +2045,23 @@ function renderRepairTable() {
   const tbody = document.getElementById("repairTableBody");
   tbody.innerHTML = "";
 
+  // Lấy dữ liệu search
   const searchInput = document.getElementById("repairSearchInput");
   const searchText = (searchInput?.value || "").toLowerCase();
 
+  // Log mảng repairs để kiểm tra
+  console.log("REPAIRS ĐỂ RENDER:", repairs);
+
+  // Lọc dữ liệu theo search
   const filteredRepairs = repairs.filter(item => {
     const pt = item.phutung?.toLowerCase() || "";
     const dd = item.diadiem?.toLowerCase() || "";
     const tg = item.thoigian?.toLowerCase() || "";
     const cp = item.chiphi?.toString() || "";
+
+    // Log từng item để kiểm tra
+    console.log("ITEM:", item);
+
     return (
       pt.includes(searchText) ||
       dd.includes(searchText) ||
@@ -2063,24 +2070,24 @@ function renderRepairTable() {
     );
   });
 
+  // Sắp xếp theo thời gian mới nhất
   filteredRepairs.sort((a, b) => {
-  const [d1, m1, y1] = a.thoigian.split("/").map(Number);
-  const [d2, m2, y2] = b.thoigian.split("/").map(Number);
+    const [d1, m1, y1] = a.thoigian.split("/").map(Number);
+    const [d2, m2, y2] = b.thoigian.split("/").map(Number);
+    const dateA = new Date(y1, m1 - 1, d1);
+    const dateB = new Date(y2, m2 - 1, d2);
+    return dateB - dateA; // mới nhất lên đầu
+  });
 
-  const dateA = new Date(y1, m1 - 1, d1);
-  const dateB = new Date(y2, m2 - 1, d2);
-
-  return dateB - dateA; // mới nhất lên đầu
-});
-
-
-  // ✅ Tính tổng chi phí từ toàn bộ dòng đã lọc (không giới hạn theo trang)
+  // Tính tổng chi phí
   const total = filteredRepairs.reduce((sum, item) => sum + item.chiphi, 0);
 
+  // Phân trang
   const startIndex = (repairPage - 1) * repairRowsPerPage;
   const endIndex = startIndex + repairRowsPerPage;
   const paginatedRepairs = filteredRepairs.slice(startIndex, endIndex);
 
+  // Tạo các dòng bảng
   paginatedRepairs.forEach((item, displayIndex) => {
     const row = document.createElement("tr");
 
@@ -2090,14 +2097,15 @@ function renderRepairTable() {
       r.thoigian === item.thoigian &&
       r.chiphi === item.chiphi
     );
-      row.addEventListener("contextmenu", function (e) {
-  e.preventDefault(); // ✅ Ngăn menu chuột phải
-  editRepair(originalIndex); // ✅ Gọi sửa
-});
 
-row.addEventListener("dblclick", function () {
-  confirmDelete1(originalIndex); // ✅ Gọi xoá
-});
+    row.addEventListener("contextmenu", function (e) {
+      e.preventDefault();
+      editRepair(originalIndex);
+    });
+
+    row.addEventListener("dblclick", function () {
+      confirmDelete1(originalIndex);
+    });
 
     row.setAttribute("onmouseover", "this.style.backgroundColor='#fff8b3'");
     row.setAttribute("onmouseout", "this.style.backgroundColor=''");
@@ -2113,12 +2121,13 @@ row.addEventListener("dblclick", function () {
     tbody.appendChild(row);
   });
 
-  // ✅ Hiển thị tổng sau khi render
+  // Hiển thị tổng chi phí
   document.getElementById("totalCost").textContent = `Tổng chi phí: ${total.toLocaleString("vi-VN")} VND`;
 
+  // Render phân trang
   renderRepairPagination(filteredRepairs.length);
-
 }
+
 
 
 function renderRepairPagination(totalItems) {
@@ -2167,6 +2176,7 @@ function renderRepairPagination(totalItems) {
 
 
 function confirmDelete1(index) {
+  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
   const item = repairs[index];
   const message = `Bạn có chắc muốn xoá dòng sau?\n- Phụ tùng: ${item.phutung}\n- Chi phí: ${item.chiphi.toLocaleString("vi-VN")} VND`;
 
@@ -2175,9 +2185,7 @@ function confirmDelete1(index) {
     showToast("🗑️ Đã xoá phụ tùng sửa chữa");
 
     saveRepairs();
-    if ((repairPage - 1) * repairRowsPerPage >= repairs.length) {
-      repairPage = Math.max(1, repairPage - 1);
-    }
+    if ((repairPage - 1) * repairRowsPerPage >= repairs.length) repairPage = Math.max(1, repairPage - 1);
     renderRepairTable();
   });
 }
@@ -2186,7 +2194,6 @@ function editRepair(index) {
   const item = repairs[index];
   currentEditingIndex = index;
 
-  // ✅ Gán vào các input của modal sửa (editRepairModal)
   document.getElementById("editPhutungInput").value = item.phutung;
   document.getElementById("editDiadiemInput").value = item.diadiem;
   document.getElementById("editThoigianInput").value = item.thoigian;
@@ -2204,7 +2211,8 @@ function showEditRepairModal() {
 
 
 function saveRepairs() {
-  localStorage.setItem("repairs", JSON.stringify(repairs));
+  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
 }
 
 function downloadBackupFile(data, filename = "repair-backup.json") {
@@ -2902,7 +2910,8 @@ function showSystemNotification(title, message, type = "info") {
   // 🔄 Đồng bộ từng user an toàn (merge, không ghi đè ghi chú)
   for (const username of uniqUsers) {
     const tasks = JSON.parse(localStorage.getItem("tasks_" + username) || "[]");
-    const repairs = JSON.parse(localStorage.getItem("repairs") || "[]");
+     const repairs = JSON.parse(localStorage.getItem("repairs_" + username) || "[]");
+
 
     // 🔹 Lấy ghi chú theo user (ưu tiên per-user)
     const perUserNoteKey = `ghiChu_${username}`;
@@ -3253,6 +3262,61 @@ window.closeModal = function(id) {
   if (el) el.style.display = "none";
 };
 </script>
+
+
+<script type="module">
+import {
+  getFirestore, collection, doc, getDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.db = getFirestore();
+
+// 🔄 LẤY DỮ LIỆU SỬA XE TỪ CLOUD → MERGE → LƯU LOCAL
+async function syncRepairFromCloud(username) {
+    if (!db) {
+        console.error("Firestore chưa được khởi tạo!");
+        return;
+    }
+
+    const userRef = doc(db, "users", username);
+    const snap = await getDoc(userRef);
+
+    let cloudRepairs = [];
+    if (snap.exists()) {
+        const cloudData = snap.data();
+        cloudRepairs = Array.isArray(cloudData.repairs) ? cloudData.repairs : [];
+    }
+
+    // Lấy local
+    const localKey = `repairs_${username}`;
+    const localRepairs = JSON.parse(localStorage.getItem(localKey) || "[]");
+
+    // Merge KHÔNG trùng
+    const merged = mergeRepairs(localRepairs, cloudRepairs);
+
+    // Lưu local
+    localStorage.setItem(localKey, JSON.stringify(merged));
+
+    console.log("🔄 Merge sửa xe xong:", merged);
+    return merged;
+}
+window.syncRepairFromCloud = syncRepairFromCloud;
+
+// ---- Merge chuẩn nhất ----
+function genKey(r) {
+    return `${r.phutung}|${r.diadiem}|${r.thoigian}|${r.chiphi}`;
+}
+
+function mergeRepairs(localArr, cloudArr) {
+    const map = new Map();
+
+    localArr.forEach(r => map.set(genKey(r), r));
+    cloudArr.forEach(r => map.set(genKey(r), r));
+
+    return Array.from(map.values());
+}
+</script>
+
 
 
 <!-- End auto-sync module -->
