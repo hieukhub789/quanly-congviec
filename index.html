@@ -3299,16 +3299,37 @@ async function syncRepairFromCloud(username) {
     const localKey = `repairs_${username}`;
     const localRepairs = JSON.parse(localStorage.getItem(localKey) || "[]");
 
-    // Merge KHÔNG trùng
+    // 🚨 CASE 1: Local rỗng nhưng Cloud có dữ liệu → ưu tiên cloud
+    if (localRepairs.length === 0 && cloudRepairs.length > 0) {
+        console.log("📥 Local rỗng → Load toàn bộ từ Cloud");
+        localStorage.setItem(localKey, JSON.stringify(cloudRepairs));
+        return cloudRepairs;
+    }
+
+    // 🚨 CASE 2: Cloud rỗng nhưng local có dữ liệu → KHÔNG merge
+    // chỉ trả local — KHÔNG đẩy rỗng lên local
+    if (cloudRepairs.length === 0 && localRepairs.length > 0) {
+        console.log("📤 Cloud rỗng → giữ nguyên Local (không merge)");
+        return localRepairs;
+    }
+
+    // 🚨 CASE 3: Cả 2 rỗng
+    if (cloudRepairs.length === 0 && localRepairs.length === 0) {
+        console.log("⭕ Local & Cloud đều rỗng");
+        return [];
+    }
+
+    // 🚨 CASE 4: Cả 2 có dữ liệu → merge bình thường
     const merged = mergeRepairs(localRepairs, cloudRepairs);
 
-    // Lưu local
     localStorage.setItem(localKey, JSON.stringify(merged));
 
     console.log("🔄 Merge sửa xe xong:", merged);
     return merged;
 }
+
 window.syncRepairFromCloud = syncRepairFromCloud;
+
 
 // ---- Merge chuẩn nhất ----
 function genKey(r) {
