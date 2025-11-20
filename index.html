@@ -1983,28 +1983,33 @@ async function showRepairModal() {
     localStorage.getItem("currentUser") ||
     "default";
 
-  // Lấy dữ liệu Cloud
+  // 1️⃣ Lấy dữ liệu Cloud
   let cloudRepairs = [];
   if (typeof window.syncRepairFromCloud === "function") {
     cloudRepairs = await window.syncRepairFromCloud(username) || [];
   }
 
-  // Lấy dữ liệu Local
+  // 2️⃣ Lấy dữ liệu Local
   let localRepairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
 
-  // Merge Cloud vào Local, không ghi đè dữ liệu local
+  // 3️⃣ Merge Cloud vào Local, KHÔNG ghi đè Cloud
   if (!localRepairs.length) {
-    // Local rỗng → Cloud làm chủ
+    // Local rỗng → Cloud làm chủ, chỉ lưu vào local
     repairs = cloudRepairs;
   } else {
-    // Merge: chỉ thêm những item chưa có trong local
+    // Local có dữ liệu → merge Cloud mới vào local
     const existingKeys = new Set(localRepairs.map(r => `${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`));
     const newFromCloud = cloudRepairs.filter(r => !existingKeys.has(`${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`));
     repairs = localRepairs.concat(newFromCloud);
   }
 
-  // Cập nhật localStorage để lần mở tiếp theo đã có dữ liệu merged
+  // 4️⃣ Cập nhật Local
   localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+
+  // 5️⃣ Đồng bộ lên Cloud chỉ nếu Local có dữ liệu
+  if (localRepairs.length && typeof dataChangedFlagSet === "function") {
+    dataChangedFlagSet(); // báo có dữ liệu thay đổi → auto sync
+  }
 
   repairPage = 1;
   renderRepairTable();
@@ -2012,6 +2017,7 @@ async function showRepairModal() {
   console.log("REPAIRS sau merge:", repairs);
 }
 window.showRepairModal = showRepairModal;
+
 
 
 function closeRepairModal() {
