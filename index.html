@@ -712,7 +712,7 @@
     <button onclick="openModal('addUserModal')"  style="background: linear-gradient(135deg, #5dade2, #85c1e9); color: #050101;font-weight: 600; ">👤➕ Người dùng</button>
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
-    <button onclick="showRepairModal()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
+    <button onclick="openRepairModalSafely()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
     <button onclick="window.open('grab_be.html', '_blank')" style="background-color: #FFD700; color: rgb(11, 11, 11);">
   Grab/Be
 </button>
@@ -1974,6 +1974,24 @@ if (chiphiInput) {
 // =============================
 //  SHOW MODAL + LOAD DATA USER
 // =============================
+
+window.openRepairModalSafely = async function () {
+    // 🔒 Chặn sync ngay khi nhấn nút
+    window.__preventAutoSync = true;
+
+    // Đợi 150ms để đảm bảo mọi auto-sync pending bị block
+    await new Promise(res => setTimeout(res, 150));
+
+    await showRepairModal();
+
+    // ☑ Cho phép sync trở lại sau 2 giây
+    setTimeout(() => {
+        window.__preventAutoSync = false;
+    }, 2000);
+};
+
+
+
 async function showRepairModal() {
   window.__preventAutoSync = true;  // ⛔ chặn sync tạm thời
 
