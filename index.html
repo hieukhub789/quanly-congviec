@@ -2225,6 +2225,48 @@ function saveEditedRepair() {
   renderRepairTable();
   closeEditRepairModal();
 }
+// Import JSON repairs
+function handleRepairJsonImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      const jsonData = JSON.parse(e.target.result);
+
+      if (!Array.isArray(jsonData)) {
+        alert("❌ File JSON không hợp lệ! Định dạng phải là mảng []");
+        return;
+      }
+
+      // Lấy user hiện tại
+      const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+
+      // Lưu vào localStorage theo từng user
+      localStorage.setItem(`repairs_${username}`, JSON.stringify(jsonData));
+
+      // Cập nhật biến repairs đang dùng trong UI
+      window.repairs = jsonData;
+
+      // Render lại bảng
+      if (typeof renderRepairTable === "function") {
+        renderRepairTable();
+      }
+
+      showToast("📥 Import danh sách sửa chữa thành công!");
+
+      console.log("📥 IMPORTED REPAIRS:", jsonData);
+    } catch (err) {
+      console.error("Import JSON error:", err);
+      alert("❌ File không đúng định dạng JSON!");
+    }
+  };
+
+  reader.readAsText(file);
+}
+
 
 function closeEditRepairModal() {
   document.getElementById("editRepairModal").style.display = "none";
