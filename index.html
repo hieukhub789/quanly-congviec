@@ -1975,6 +1975,8 @@ if (chiphiInput) {
 //  SHOW MODAL + LOAD DATA USER
 // =============================
 async function showRepairModal() {
+  window.__preventAutoSync = true;  // ⛔ chặn sync tạm thời
+
   document.getElementById("repairModal").style.display = "block";
 
   const username =
@@ -1983,39 +1985,33 @@ async function showRepairModal() {
     localStorage.getItem("currentUser") ||
     "default";
 
-  // 1️⃣ Lấy dữ liệu Cloud
-  let cloudRepairs = [];
-  if (typeof window.syncRepairFromCloud === "function") {
-    cloudRepairs = await window.syncRepairFromCloud(username) || [];
-  }
+  let cloudRepairs =
+    typeof window.syncRepairFromCloud === "function"
+      ? await window.syncRepairFromCloud(username)
+      : [];
 
-  // 2️⃣ Lấy dữ liệu Local
   let localRepairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
 
-  // 3️⃣ Merge Cloud vào Local, KHÔNG ghi đè Cloud
   if (!localRepairs.length) {
-    // Local rỗng → Cloud làm chủ, chỉ lưu vào local
     repairs = cloudRepairs;
   } else {
-    // Local có dữ liệu → merge Cloud mới vào local
-    const existingKeys = new Set(localRepairs.map(r => `${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`));
-    const newFromCloud = cloudRepairs.filter(r => !existingKeys.has(`${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`));
+    const existingKeys = new Set(
+      localRepairs.map(r => `${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`)
+    );
+    const newFromCloud = cloudRepairs.filter(
+      r => !existingKeys.has(`${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`)
+    );
     repairs = localRepairs.concat(newFromCloud);
   }
 
-  // 4️⃣ Cập nhật Local
   localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
-
-  // 5️⃣ Đồng bộ lên Cloud chỉ nếu Local có dữ liệu
-  if (localRepairs.length && typeof dataChangedFlagSet === "function") {
-    dataChangedFlagSet(); // báo có dữ liệu thay đổi → auto sync
-  }
 
   repairPage = 1;
   renderRepairTable();
 
-  console.log("REPAIRS sau merge:", repairs);
+  window.__preventAutoSync = false; // ✔ bật lại sync
 }
+
 window.showRepairModal = showRepairModal;
 
 
@@ -2882,6 +2878,8 @@ function showSystemNotification(title, message, type = "info") {
       console.warn('Firestore not initialized');
       return;
     }
+    if (window.__preventAutoSync) return;// chặn moda sua xe
+
     if (syncInProgress) return;
     syncInProgress = true;
     tinyToast('🔄 Đồng bộ Firebase...');
