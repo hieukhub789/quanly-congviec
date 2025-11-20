@@ -1922,91 +1922,88 @@ document.addEventListener("keydown", function (event) {
 
 
 <script>
+
+// =============================
+//  REPAIR MODULE (FULL JS FILE)
+// =============================
+// Tối ưu — chạy theo từng user, auto sync Firebase, phân trang, search, edit, delete
+// =============================
+
 let editingRepairIndex = -1;
 let currentEditingIndex = -1;
-
-
-let repairs = JSON.parse(localStorage.getItem("repairs")) || [];
+let repairs = [];
 let repairPage = 1;
 const repairRowsPerPage = 5;
-// sửa lý chi phí ban đầu
+
+// =============================
+//  FORMAT CHI PHÍ KHI NHẬP (INPUT CHÍNH)
+// =============================
 const chiphiInput = document.getElementById("chiphiInput");
+if (chiphiInput) {
+  chiphiInput.addEventListener("input", function (e) {
+    const input = e.target;
+    const rawValue = input.value;
+    const oldCursor = input.selectionStart;
+    const digits = rawValue.replace(/\D/g, "");
 
-chiphiInput.addEventListener("input", function (e) {
-  const input = e.target;
-  const rawValue = input.value;
+    if (!digits) return (input.value = "");
 
-  // Ghi lại vị trí con trỏ trước khi thay đổi
-  const oldCursor = input.selectionStart;
+    const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
-  // Lấy tất cả chữ số
-  const digits = rawValue.replace(/\D/g, "");
-
-  if (!digits) {
-    input.value = "";
-    return;
-  }
-
-  // Định dạng dấu chấm hàng nghìn
-  const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-  // Tính lại vị trí con trỏ dựa trên số chữ số trước con trỏ cũ
-  let digitCountBeforeCursor = 0;
-  for (let i = 0; i < oldCursor; i++) {
-    if (/\d/.test(rawValue[i])) digitCountBeforeCursor++;
-  }
-
-  // Gán lại giá trị đã định dạng
-  input.value = formatted;
-
-  // Tìm vị trí mới tương ứng của con trỏ
-  let newCursor = 0;
-  let digitSeen = 0;
-  for (let i = 0; i < formatted.length; i++) {
-    if (/\d/.test(formatted[i])) digitSeen++;
-    if (digitSeen === digitCountBeforeCursor) {
-      newCursor = i + 1;
-      break;
+    let digitCountBeforeCursor = 0;
+    for (let i = 0; i < oldCursor; i++) {
+      if (/\d/.test(rawValue[i])) digitCountBeforeCursor++;
     }
-  }
 
-  // Cập nhật lại vị trí con trỏ sau 1 tick
-  setTimeout(() => {
-    input.setSelectionRange(newCursor, newCursor);
-  }, 0);
-});
+    input.value = formatted;
 
+    let newCursor = 0;
+    let digitSeen = 0;
+    for (let i = 0; i < formatted.length; i++) {
+      if (/\d/.test(formatted[i])) digitSeen++;
+      if (digitSeen === digitCountBeforeCursor) {
+        newCursor = i + 1;
+        break;
+      }
+    }
 
+    setTimeout(() => input.setSelectionRange(newCursor, newCursor), 0);
+  });
+}
+
+// =============================
+//  SHOW MODAL + LOAD DATA USER
+// =============================
 async function showRepairModal() {
   document.getElementById("repairModal").style.display = "block";
 
-  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+  const username =
+    window.currentUser ||
+    localStorage.getItem("selectedUser") ||
+    localStorage.getItem("currentUser") ||
+    "default";
 
-  // Sync cloud → local
   const mergedRepairs = await window.syncRepairFromCloud(username);
-
-  // 🔹 Gán dữ liệu cho biến UI
   repairs = mergedRepairs || [];
 
   repairPage = 1;
-
-  // Render table sau khi có dữ liệu
   renderRepairTable();
-
-  console.log("REPAIRS sau merge:", repairs);
 }
-
-
 window.showRepairModal = showRepairModal;
-
-
 
 function closeRepairModal() {
   document.getElementById("repairModal").style.display = "none";
 }
 
+// =============================
+//  ADD + EDIT REPAIR ROW
+// =============================
 function addRepairRow() {
-  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+  const username =
+    window.currentUser ||
+    localStorage.getItem("selectedUser") ||
+    localStorage.getItem("currentUser") ||
+    "default";
 
   const phutung = document.getElementById("phutungInput").value.trim();
   const diadiem = document.getElementById("diadiemInput").value.trim();
@@ -2014,80 +2011,89 @@ function addRepairRow() {
   const chiphi = document.getElementById("chiphiInput").value.trim();
 
   const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
-  if (!phutung || !diadiem || !thoigian || !chiphi) return alert("Vui lòng nhập đầy đủ thông tin!");
-  if (!dateRegex.test(thoigian)) return alert("Ngày sai định dạng dd/mm/yyyy!");
+  if (!phutung || !diadiem || !thoigian || !chiphi)
+    return alert("Vui lòng nhập đầy đủ thông tin!");
+  if (!dateRegex.test(thoigian))
+    return alert("Ngày sai định dạng dd/mm/yyyy!");
 
   const parsedChiPhi = parseInt(chiphi.replace(/\./g, ""));
 
   if (editingRepairIndex >= 0) {
-    // Sửa
-    repairs[editingRepairIndex] = { phutung, diadiem, thoigian, chiphi: parsedChiPhi };
+    repairs[editingRepairIndex] = {
+      phutung,
+      diadiem,
+      thoigian,
+      chiphi: parsedChiPhi,
+    };
     showToast("✏️ Đã sửa thông tin!");
     editingRepairIndex = -1;
   } else {
-    // Thêm mới
     repairs.unshift({ phutung, diadiem, thoigian, chiphi: parsedChiPhi });
     showToast("✅ Đã thêm mới thông tin!");
   }
 
-  saveRepairs();
+  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
+
   repairPage = 1;
   renderRepairTable();
 
-  // Reset input
   document.getElementById("phutungInput").value = "";
   document.getElementById("diadiemInput").value = "";
   document.getElementById("thoigianInput").value = "";
   document.getElementById("chiphiInput").value = "";
 }
 
+// =============================
+// LOAD REPAIRS CHO USER
+// =============================
+function loadRepairsForUser() {
+  const username =
+    window.currentUser ||
+    localStorage.getItem("selectedUser") ||
+    localStorage.getItem("currentUser") ||
+    "default";
+
+  repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
+  renderRepairTable();
+}
+
+// =============================
+//  RENDER TABLE + SEARCH + SORT + PAGE
+// =============================
 function renderRepairTable() {
+  const username =
+    window.currentUser ||
+    localStorage.getItem("selectedUser") ||
+    localStorage.getItem("currentUser") ||
+    "default";
+
+  repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
+
   const tbody = document.getElementById("repairTableBody");
   tbody.innerHTML = "";
 
-  // Lấy dữ liệu search
-  const searchInput = document.getElementById("repairSearchInput");
-  const searchText = (searchInput?.value || "").toLowerCase();
+  const searchText = (document.getElementById("repairSearchInput")?.value || "").toLowerCase();
 
-  // Log mảng repairs để kiểm tra
-  console.log("REPAIRS ĐỂ RENDER:", repairs);
-
-  // Lọc dữ liệu theo search
   const filteredRepairs = repairs.filter(item => {
     const pt = item.phutung?.toLowerCase() || "";
     const dd = item.diadiem?.toLowerCase() || "";
     const tg = item.thoigian?.toLowerCase() || "";
     const cp = item.chiphi?.toString() || "";
-
-    // Log từng item để kiểm tra
-    console.log("ITEM:", item);
-
-    return (
-      pt.includes(searchText) ||
-      dd.includes(searchText) ||
-      tg.includes(searchText) ||
-      cp.includes(searchText)
-    );
+    return pt.includes(searchText) || dd.includes(searchText) || tg.includes(searchText) || cp.includes(searchText);
   });
 
-  // Sắp xếp theo thời gian mới nhất
   filteredRepairs.sort((a, b) => {
     const [d1, m1, y1] = a.thoigian.split("/").map(Number);
     const [d2, m2, y2] = b.thoigian.split("/").map(Number);
-    const dateA = new Date(y1, m1 - 1, d1);
-    const dateB = new Date(y2, m2 - 1, d2);
-    return dateB - dateA; // mới nhất lên đầu
+    return new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1);
   });
 
-  // Tính tổng chi phí
   const total = filteredRepairs.reduce((sum, item) => sum + item.chiphi, 0);
 
-  // Phân trang
   const startIndex = (repairPage - 1) * repairRowsPerPage;
-  const endIndex = startIndex + repairRowsPerPage;
-  const paginatedRepairs = filteredRepairs.slice(startIndex, endIndex);
+  const paginatedRepairs = filteredRepairs.slice(startIndex, startIndex + repairRowsPerPage);
 
-  // Tạo các dòng bảng
   paginatedRepairs.forEach((item, displayIndex) => {
     const row = document.createElement("tr");
 
@@ -2098,17 +2104,12 @@ function renderRepairTable() {
       r.chiphi === item.chiphi
     );
 
-    row.addEventListener("contextmenu", function (e) {
+    row.addEventListener("contextmenu", e => {
       e.preventDefault();
       editRepair(originalIndex);
     });
 
-    row.addEventListener("dblclick", function () {
-      confirmDelete1(originalIndex);
-    });
-
-    row.setAttribute("onmouseover", "this.style.backgroundColor='#fff8b3'");
-    row.setAttribute("onmouseout", "this.style.backgroundColor=''");
+    row.addEventListener("dblclick", () => confirmDelete1(originalIndex));
 
     row.innerHTML = `
       <td>${startIndex + displayIndex + 1}</td>
@@ -2121,15 +2122,13 @@ function renderRepairTable() {
     tbody.appendChild(row);
   });
 
-  // Hiển thị tổng chi phí
   document.getElementById("totalCost").textContent = `Tổng chi phí: ${total.toLocaleString("vi-VN")} VND`;
-
-  // Render phân trang
   renderRepairPagination(filteredRepairs.length);
 }
 
-
-
+// =============================
+//  PHÂN TRANG
+// =============================
 function renderRepairPagination(totalItems) {
   const pageCount = Math.ceil(totalItems / repairRowsPerPage);
   const container = document.getElementById("repairPagination");
@@ -2149,34 +2148,28 @@ function renderRepairPagination(totalItems) {
     container.appendChild(btn);
   };
 
-  // Mũi tên điều hướng
   createButton("«", 1, repairPage === 1);
   createButton("<", repairPage - 1, repairPage === 1);
 
-  // Hiển thị dãy số trang gần trang hiện tại
   const visibleRange = 2;
   let start = Math.max(1, repairPage - visibleRange);
   let end = Math.min(pageCount, repairPage + visibleRange);
 
-  if (repairPage <= visibleRange) {
-    end = Math.min(pageCount, end + (visibleRange - repairPage + 1));
-  }
-
-  if (repairPage >= pageCount - visibleRange + 1) {
-    start = Math.max(1, start - (repairPage - (pageCount - visibleRange)));
-  }
-
-  for (let i = start; i <= end; i++) {
-    createButton(i, i, false, i === repairPage);
-  }
+  for (let i = start; i <= end; i++) createButton(i, i, false, i === repairPage);
 
   createButton(">", repairPage + 1, repairPage === pageCount);
   createButton("»", pageCount, repairPage === pageCount);
 }
 
-
+// =============================
+//  DELETE + EDIT
+// =============================
 function confirmDelete1(index) {
-  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+  const username =
+    window.currentUser ||
+    localStorage.getItem("currentUser") ||
+    "default";
+
   const item = repairs[index];
   const message = `Bạn có chắc muốn xoá dòng sau?\n- Phụ tùng: ${item.phutung}\n- Chi phí: ${item.chiphi.toLocaleString("vi-VN")} VND`;
 
@@ -2184,7 +2177,9 @@ function confirmDelete1(index) {
     repairs.splice(index, 1);
     showToast("🗑️ Đã xoá phụ tùng sửa chữa");
 
-    saveRepairs();
+    localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+    if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
+
     if ((repairPage - 1) * repairRowsPerPage >= repairs.length) repairPage = Math.max(1, repairPage - 1);
     renderRepairTable();
   });
@@ -2207,138 +2202,6 @@ function showEditRepairModal() {
   if (modal) modal.style.display = "block";
 }
 
-
-
-
-function saveRepairs() {
-  const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
-  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
-}
-
-function downloadBackupFile(data, filename = "repair-backup.json") {
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  
-  URL.revokeObjectURL(url); // Giải phóng bộ nhớ
-}
-
-
-// Đóng bằng ESC
-document.addEventListener("keydown", function (event) {
-  if (event.key === "Escape") {
-    closeRepairModal();
-  }
-});
-
-// xóa tất cả
-document.getElementById("clearAllRepairsBtn").addEventListener("click", function () {
-  if (repairs.length === 0) {
-    alert("Không có dữ liệu để xoá.");
-    return;
-  }
-
-  showConfirmModal("Bạn có chắc muốn xoá toàn bộ dữ liệu sửa chữa?", () => {
-  if (repairs.length > 0) {
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, "-");
-    const filename = `repair-backup-${timestamp}.json`;
-    downloadBackupFile(repairs, filename);
-  }
-
-  repairs = [];
-  saveRepairs();
-  renderRepairTable();
-  showToast("🗑️ Đã xoá toàn bộ & lưu file backup");
-});
-
-});
-
-
-
-// thêm modal
-let confirmAction = null;
-
-function showConfirmModal(message, onConfirm) {
-  document.getElementById("confirmMessage").textContent = message;
-  document.getElementById("confirmModal").style.display = "flex";
-  confirmAction = onConfirm;
-}
-
-document.getElementById("confirmYes").addEventListener("click", function () {
-  if (typeof confirmAction === "function") confirmAction();
-  document.getElementById("confirmModal").style.display = "none";
-});
-
-document.getElementById("confirmNo").addEventListener("click", function () {
-  document.getElementById("confirmModal").style.display = "none";
-});
-
-// input dữ liệu
-function handleRepairJsonImport(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function (e) {
-    try {
-      const importedData = JSON.parse(e.target.result);
-
-      if (!Array.isArray(importedData)) {
-        showToast("❌ Dữ liệu không phải là danh sách sửa chữa!");
-        return;
-      }
-
-      const MAX_IMPORT = 1000;
-      if (importedData.length > MAX_IMPORT) {
-        showToast(`⚠️ File có quá nhiều dòng (${importedData.length}). Giới hạn là ${MAX_IMPORT}.`);
-        return;
-      }
-
-      const currentRepairs = JSON.parse(localStorage.getItem("repairs") || "[]");
-
-      // Xác định key duy nhất để kiểm tra trùng
-      const generateRepairKey = (r) =>
-        `${r.phutung}-${r.diadiem}-${r.thoigian}-${r.chiphi}`;
-
-      const existingKeys = new Set(currentRepairs.map(generateRepairKey));
-
-      const newRepairs = importedData
-        .filter(r =>
-          r &&
-          typeof r.phutung === "string" &&
-          typeof r.diadiem === "string" &&
-          typeof r.thoigian === "string" &&
-          typeof r.chiphi === "number"
-        )
-        .filter(r => !existingKeys.has(generateRepairKey(r)));
-
-      if (newRepairs.length === 0) {
-        showToast("ℹ️ Không có dòng mới nào được thêm (toàn bộ đã tồn tại hoặc sai định dạng).");
-        return;
-      }
-
-      const updatedRepairs = currentRepairs.concat(newRepairs);
-      localStorage.setItem("repairs", JSON.stringify(updatedRepairs));
-
-      showToast(`✅ Đã thêm ${newRepairs.length} dòng (bỏ qua ${importedData.length - newRepairs.length} dòng trùng hoặc sai định dạng)`);
-
-      setTimeout(() => location.reload(), 2000);
-
-    } catch (err) {
-      showToast("❌ Không thể đọc file JSON! Có thể file bị hỏng hoặc sai cú pháp.");
-      console.error("Lỗi đọc file sửa chữa:", err);
-    }
-  };
-
-  reader.readAsText(file);
-}
 function saveEditedRepair() {
   const pt = document.getElementById("editPhutungInput").value.trim();
   const dd = document.getElementById("editDiadiemInput").value.trim();
@@ -2348,15 +2211,8 @@ function saveEditedRepair() {
   const parsedCost = parseInt(cp.replace(/\./g, ""));
   const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
 
-  if (!pt || !dd || !tg || !cp) {
-    alert("Vui lòng điền đầy đủ thông tin!");
-    return;
-  }
-
-  if (!dateRegex.test(tg)) {
-    alert("Sai định dạng ngày. Dùng dd/mm/yyyy.");
-    return;
-  }
+  if (!pt || !dd || !tg || !cp) return alert("Vui lòng điền đầy đủ thông tin!");
+  if (!dateRegex.test(tg)) return alert("Sai định dạng ngày. Dùng dd/mm/yyyy.");
 
   repairs[currentEditingIndex] = {
     phutung: pt,
@@ -2374,18 +2230,83 @@ function closeEditRepairModal() {
   document.getElementById("editRepairModal").style.display = "none";
   currentEditingIndex = -1;
 }
+
+// Format trong modal edit
 const editChiPhiInput = document.getElementById("editChiphiInput");
 if (editChiPhiInput) {
   editChiPhiInput.addEventListener("input", function (e) {
-    const input = e.target;
-    const rawValue = input.value;
-    const digits = rawValue.replace(/\D/g, "");
-    if (!digits) return input.value = "";
-
-    const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    input.value = formatted;
+    const digits = e.target.value.replace(/\D/g, "");
+    e.target.value = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   });
 }
+
+// =============================
+//  SAVE + BACKUP + IMPORT
+// =============================
+function saveRepairs() {
+  const username =
+    window.currentUser ||
+    localStorage.getItem("selectedUser") ||
+    localStorage.getItem("currentUser") ||
+    "default";
+
+  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
+}
+
+function downloadBackupFile(data, filename = "repair-backup.json") {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// =============================
+//  CLEAR ALL
+// =============================
+document.getElementById("clearAllRepairsBtn").addEventListener("click", function () {
+  if (repairs.length === 0) return alert("Không có dữ liệu để xoá.");
+
+  showConfirmModal("Bạn có chắc muốn xoá toàn bộ dữ liệu sửa chữa?", () => {
+    const now = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `repair-backup-${now}.json`;
+
+    downloadBackupFile(repairs, filename);
+
+    repairs = [];
+    saveRepairs();
+    renderRepairTable();
+    showToast("🗑️ Đã xoá toàn bộ & lưu file backup");
+  });
+});
+
+// =============================
+//  CONFIRM MODAL
+// =============================
+let confirmAction = null;
+
+function showConfirmModal(message, onConfirm) {
+  document.getElementById("confirmMessage").textContent = message;
+  document.getElementById("confirmModal").style.display = "flex";
+  confirmAction = onConfirm;
+}
+
+document.getElementById("confirmYes").onclick = function () {
+  if (typeof confirmAction === "function") confirmAction();
+  document.getElementById("confirmModal").style.display = "none";
+};
+
+document.getElementById("confirmNo").onclick = function () {
+  document.getElementById("confirmModal").style.display = "none";
+};
+
+// ESC đóng modal
+
 </script>
 <script type="module">
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
