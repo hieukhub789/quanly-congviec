@@ -712,7 +712,7 @@
     <button onclick="openModal('addUserModal')"  style="background: linear-gradient(135deg, #5dade2, #85c1e9); color: #050101;font-weight: 600; ">👤➕ Người dùng</button>
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
-    <button onclick="openRepairModalSafely()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
+    <button onclick="showRepairModal()" style="background-color: #534bc7; color: white; "> Sửa xe</button>
     <button onclick="window.open('grab_be.html', '_blank')" style="background-color: #FFD700; color: rgb(11, 11, 11);">
   Grab/Be
 </button>
@@ -1974,24 +1974,6 @@ if (chiphiInput) {
 // =============================
 //  SHOW MODAL + LOAD DATA USER
 // =============================
-
-window.openRepairModalSafely = async function () {
-    // 🔒 Chặn sync ngay khi nhấn nút
-    window.__preventAutoSync = true;
-
-    // Đợi 150ms để đảm bảo mọi auto-sync pending bị block
-    await new Promise(res => setTimeout(res, 150));
-
-    await showRepairModal();
-
-    // ☑ Cho phép sync trở lại sau 2 giây
-    setTimeout(() => {
-        window.__preventAutoSync = false;
-    }, 2000);
-};
-
-
-
 async function showRepairModal() {
   window.__preventAutoSync = true;  // ⛔ chặn sync tạm thời
 
@@ -2944,18 +2926,23 @@ function showSystemNotification(title, message, type = "info") {
         finalNote = cloudData.notes;
       }
 
-      // 🔸 Ghi dữ liệu hợp nhất lên Cloud (merge an toàn, KHÔNG delete)
-      await setDoc(
-        userRef,
-        {
-          username,
-          tasks,
-          repairs,
-          notes: finalNote,
-          lastSync: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      // ---- AN TOÀN CHO TASKS & NOTES ----
+const payload = {
+  username,
+  tasks,             // giữ nguyên
+  notes: finalNote,  // giữ nguyên
+  lastSync: new Date().toISOString(),
+};
+
+// ---- FIX KHÔNG GHI ĐÈ REPAIRS ----
+// Chỉ ghi lên Cloud nếu local có dữ liệu thật
+if (Array.isArray(repairs) && repairs.length > 0) {
+  payload.repairs = repairs;
+}
+
+// ---- Ghi merge ----
+await setDoc(userRef, payload, { merge: true });
+
 
       console.log(`✅ Đồng bộ user ${username}: note="${finalNote}"`);
     } catch (e) {
@@ -3299,37 +3286,16 @@ async function syncRepairFromCloud(username) {
     const localKey = `repairs_${username}`;
     const localRepairs = JSON.parse(localStorage.getItem(localKey) || "[]");
 
-    // 🚨 CASE 1: Local rỗng nhưng Cloud có dữ liệu → ưu tiên cloud
-    if (localRepairs.length === 0 && cloudRepairs.length > 0) {
-        console.log("📥 Local rỗng → Load toàn bộ từ Cloud");
-        localStorage.setItem(localKey, JSON.stringify(cloudRepairs));
-        return cloudRepairs;
-    }
-
-    // 🚨 CASE 2: Cloud rỗng nhưng local có dữ liệu → KHÔNG merge
-    // chỉ trả local — KHÔNG đẩy rỗng lên local
-    if (cloudRepairs.length === 0 && localRepairs.length > 0) {
-        console.log("📤 Cloud rỗng → giữ nguyên Local (không merge)");
-        return localRepairs;
-    }
-
-    // 🚨 CASE 3: Cả 2 rỗng
-    if (cloudRepairs.length === 0 && localRepairs.length === 0) {
-        console.log("⭕ Local & Cloud đều rỗng");
-        return [];
-    }
-
-    // 🚨 CASE 4: Cả 2 có dữ liệu → merge bình thường
+    // Merge KHÔNG trùng
     const merged = mergeRepairs(localRepairs, cloudRepairs);
 
+    // Lưu local
     localStorage.setItem(localKey, JSON.stringify(merged));
 
     console.log("🔄 Merge sửa xe xong:", merged);
     return merged;
 }
-
 window.syncRepairFromCloud = syncRepairFromCloud;
-
 
 // ---- Merge chuẩn nhất ----
 function genKey(r) {
