@@ -1187,12 +1187,14 @@ function isLocalStorageFull(data) {
   }
 
   const newTask = {
-    task,
-    note,
-    status: "Chưa làm",
-    date: new Date().toLocaleDateString("vi-VN"),
-    pinned: false // 🆕 mặc định công việc mới chưa ghim
-  };
+    id: crypto.randomUUID(),   // ⭐ THÊM DÒNG NÀY
+    date: ngay,
+    note: ghichu,
+    pinned: false,
+    status: "Chưa hoàn thành",
+    task: noidung
+};
+
 
   const tempData = JSON.stringify([newTask, ...tasks]);
 
@@ -1512,8 +1514,8 @@ function toggleEditTask() {
   const modalStatus = document.getElementById("modalStatus");
   const editSaveBtn = document.getElementById("editSaveBtn");
 
+  // --- Nếu đang ở chế độ xem → chuyển sang chế độ sửa ---
   if (!isEditing) {
-    // Bật chế độ chỉnh sửa
     taskDiv.contentEditable = "true";
     noteDiv.contentEditable = "true";
     taskDiv.style.backgroundColor = "#fff";
@@ -1522,51 +1524,85 @@ function toggleEditTask() {
 
     editSaveBtn.textContent = "Lưu";
     isEditing = true;
-  } else {
-    // Lưu thay đổi
-    const updatedTask = taskDiv.innerText.trim();
-    const updatedNote = noteDiv.innerText.trim();
-    const updatedStatus = modalStatus.value;
-
-    if (updatedTask === "") {
-      alert("Công việc không được để trống!");
-      return;
-    }
-
-    // Cập nhật đúng công việc hiện tại
-    tasks[currentDetailIndex].task = updatedTask;
-    tasks[currentDetailIndex].note = updatedNote;
-    tasks[currentDetailIndex].status = updatedStatus;
-
-    saveToLocalStorage();
-    filterTasks();
-    showDetails(currentDetailIndex);
-
-    editSaveBtn.textContent = "Sửa";
-    isEditing = false;
-
-    // Đóng khóa chỉnh sửa
-    taskDiv.contentEditable = "false";
-    noteDiv.contentEditable = "false";
-    taskDiv.style.backgroundColor = "#e0e0e0";
-    noteDiv.style.backgroundColor = "#e0e0e0";
-    modalStatus.disabled = true;
+    return;
   }
+
+  // --- Ngược lại: lưu dữ liệu đã sửa ---
+  const updatedTask = taskDiv.innerText.trim();
+  const updatedNote = noteDiv.innerText.trim();
+  const updatedStatus = modalStatus.value;
+
+  if (updatedTask === "") {
+    alert("Công việc không được để trống!");
+    return;
+  }
+
+  // Thêm id nếu task chưa có
+  if (!tasks[currentDetailIndex].id) {
+    tasks[currentDetailIndex].id = crypto.randomUUID();
+  }
+  const editedId = tasks[currentDetailIndex].id;
+
+  // GHI DỮ LIỆU MỚI
+  tasks[currentDetailIndex].task = updatedTask;
+  tasks[currentDetailIndex].note = updatedNote;
+  tasks[currentDetailIndex].status = updatedStatus;
+
+  // LƯU LOCAL
+  saveToLocalStorage();
+
+  // Render lại UI (có lọc/sort)
+  filterTasks();
+
+  // 🔥 SAU KHI RENDER: tìm lại task bằng ID để modal không bị nhảy sai
+  const newIndex = tasks.findIndex(t => t.id === editedId);
+  if (newIndex !== -1) {
+    currentDetailIndex = newIndex;
+    showDetails(newIndex);  // mở lại modal với dữ liệu đã chỉnh
+  }
+
+  // Tắt chế độ chỉnh sửa
+  taskDiv.contentEditable = "false";
+  noteDiv.contentEditable = "false";
+  taskDiv.style.backgroundColor = "#e0e0e0";
+  noteDiv.style.backgroundColor = "#e0e0e0";
+  modalStatus.disabled = true;
+
+  editSaveBtn.textContent = "Sửa";
+  isEditing = false;
 }
+
   // xóa chi tiết
   function openDeleteConfirmation() {
     document.getElementById("confirmDeleteModal").style.display = "block";
   }
 
   function confirmDelete() {
-    tasks.splice(currentDetailIndex, 1);
-    saveToLocalStorage();
-    filterTasks();
-    closeModal("detailModal");
-    closeModal("confirmDeleteModal");
-    showToast("Đã xoá công việc!");
-    if (currentDetailIndex === -1) return;
-  }
+  const username =
+    window.currentUser ||
+    localStorage.getItem("currentUser") ||
+    "default";
+
+  const taskId = tasks[currentDetailIndex].id;
+
+  // Xoá theo ID để tránh xoá nhầm khi thứ tự khác nhau
+  tasks = tasks.filter(t => t.id !== taskId);
+
+  // Lưu lại
+  localStorage.setItem(`tasks_${username}`, JSON.stringify(tasks));
+
+  // Đồng bộ Firebase
+  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
+
+  // Render lại UI
+  filterTasks();
+  closeModal("detailModal");
+  closeModal("confirmDeleteModal");
+  showToast("🗑️ Đã xoá công việc!");
+
+  currentDetailIndex = -1;
+}
+
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
@@ -2977,108 +3013,104 @@ await setDoc(userRef, payload, { merge: true });
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // 🔄 Đồng bộ từ Firestore về Local
-  window.syncFromFirebase = async function() {
-    const user = localStorage.getItem("currentUser") || window.currentUser || "nhi";
-    window.currentUser = user;
-    console.log("👤 Đồng bộ dữ liệu cho user:", user);
+  window.syncFromFirebase = async function () {
+  const user = localStorage.getItem("currentUser") || window.currentUser || "nhi";
+  window.currentUser = user;
+  console.log("👤 Đồng bộ dữ liệu cho user:", user);
 
-    // 🔹 Truy cập document: users/{user}
-    const userDocRef = doc(window.db, "users", user);
-    console.log("📂 Truy cập Firestore document:", `users/${user}`);
+  const userDocRef = doc(window.db, "users", user);
 
-    try {
-      const docSnap = await getDoc(userDocRef);
+  try {
+    const docSnap = await getDoc(userDocRef);
 
-      if (!docSnap.exists()) {
-        tinyShowToast("⚠️ Không tìm thấy dữ liệu người dùng này trên Cloud!");
-        return;
-      }
-
-      // 🔹 Lấy mảng tasks trong document
-      const data = docSnap.data();
-      const cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
-      console.log("📥 Dữ liệu tải từ Firebase:", cloudTasks);
-
-      // 🔹 Lấy dữ liệu local hiện tại
-      const localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-      // 🔹 So sánh và gộp (merge)
-      const merged = [...localTasks];
-      let addedCount = 0;
-
-      cloudTasks.forEach(cloudTask => {
-        const exists = localTasks.some(
-          local =>
-            local.task === cloudTask.task &&
-            (local.note || "") === (cloudTask.note || "") &&
-            local.date === cloudTask.date
-        );
-        if (!exists) {
-          merged.push(cloudTask);
-          addedCount++;
-        }
-      });
-
-      // 🔹 Cập nhật lại Local nếu có dữ liệu mới
-      // 🔹 Cập nhật lại LocalStorage (nếu có dữ liệu mới)
-if (addedCount > 0) {
-  localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
-  window.tasks = merged;
-} else {
-  // nếu không có dữ liệu mới, vẫn cần đồng bộ window.tasks từ local
-  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-}
-// 🆕 🔹 Đồng bộ ghi chú (notes)
-if (data.notes !== undefined) {
-  localStorage.setItem("ghiChu", data.notes || "");
-  console.log("🗒️ Đã cập nhật ghi chú từ Firebase:", data.notes);
-}
-
-// ✅ Luôn cập nhật giao diện
-if (typeof window.filterTasks === "function") window.filterTasks();
-window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-  // 🔹 Log kiểm tra
-  console.log("🧩 Kiểm tra window.tasks sau sync:", window.tasks);
-
-  // ✅ Luôn render lại danh sách
-  if (typeof window.filterTasks === "function") {
-    console.log("🔁 Gọi filterTasks() để cập nhật UI");
-    window.filterTasks();
-  } else {
-    console.warn("⚠️ Không tìm thấy hàm filterTasks!");
-  }
-
-tinyShowToast(
-  addedCount > 0
-    ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
-    : "☁️ Dữ liệu đã được cập nhật, không có gì mới."
-);
-
-    } catch (err) {
-      console.error(err);
-      tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
+    if (!docSnap.exists()) {
+      tinyShowToast("⚠️ Không tìm thấy dữ liệu người dùng trên Cloud!");
+      return;
     }
-  };
 
-  // 🔔 Thông báo nhỏ gọn
-  window.tinyShowToast = function(msg) {
-    const el = document.createElement("div");
-    el.textContent = msg;
-    Object.assign(el.style, {
-      position: "fixed",
-      bottom: "20px",
-      right: "20px",
-      background: "#2ecc71",
-      color: "white",
-      padding: "10px 15px",
-      borderRadius: "8px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-      zIndex: 9999,
-      fontWeight: "bold"
+    // ====== 1. Lấy task từ cloud ======
+    const data = docSnap.data();
+    let cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
+
+    // ====== 2. Auto generate ID cho task cũ chưa có ID ======
+    cloudTasks = cloudTasks.map(t => ({
+      id: t.id || crypto.randomUUID(),   // ⭐ Tạo ID nếu chưa có
+      task: t.task,
+      note: t.note || "",
+      date: t.date,
+      status: t.status || "pending"
+    }));
+
+    console.log("☁️ Cloud tasks sau khi chuẩn hóa:", cloudTasks);
+
+    // ====== 3. Lấy dữ liệu local ======
+    let localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+    // Tạo ID cho local nếu thiếu (để tránh lỗi khi so sánh)
+    localTasks = localTasks.map(t => ({
+      id: t.id || crypto.randomUUID(),
+      ...t
+    }));
+
+    // ====== 4. Merge theo ID ======
+    const merged = [...localTasks];
+    let addedCount = 0;
+
+    cloudTasks.forEach(cloudItem => {
+      const exists = localTasks.some(local => local.id === cloudItem.id);
+      if (!exists) {
+        merged.push(cloudItem);
+        addedCount++;
+      }
     });
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 3500);
+
+    // ====== 5. Lưu lại local ======
+    localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+    window.tasks = merged;
+
+    // ====== 6. Đồng bộ ghi chú (nếu có) ======
+    if (data.notes !== undefined) {
+      localStorage.setItem(`ghiChu_${user}`, data.notes || "");
+    }
+
+    console.log("🧩 Final merged tasks:", merged);
+
+    // ====== 7. Cập nhật UI ======
+    if (typeof window.filterTasks === "function") {
+      window.filterTasks();
+    }
+
+    tinyShowToast(
+      addedCount > 0
+        ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
+        : "☁️ Dữ liệu đã cập nhật — không có gì mới."
+    );
+
+  } catch (err) {
+    console.error(err);
+    tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
+  }
+};
+
+
+// ===== Toast nhỏ =====
+window.tinyShowToast = function (msg) {
+  const el = document.createElement("div");
+  el.textContent = msg;
+  Object.assign(el.style, {
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    background: "#2ecc71",
+    color: "white",
+    padding: "10px 15px",
+    borderRadius: "8px",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+    zIndex: 9999,
+    fontWeight: "bold"
+  });
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
   };
 </script>
 <!-- thêm user xoá user -->
