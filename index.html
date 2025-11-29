@@ -3013,105 +3013,97 @@ await setDoc(userRef, payload, { merge: true });
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // 🔄 Đồng bộ từ Firestore về Local
+  
   window.syncFromFirebase = async function () {
-  const user = localStorage.getItem("currentUser") || window.currentUser || "nhi";
+  const user = window.currentUser || localStorage.getItem("currentUser") || "nhi";
   window.currentUser = user;
-  console.log("👤 Đồng bộ dữ liệu cho user:", user);
 
   const userDocRef = doc(window.db, "users", user);
 
-  try {
-    const docSnap = await getDoc(userDocRef);
+  console.log("⬇️ Sync FROM Firebase cho user:", user);
 
-    if (!docSnap.exists()) {
-      tinyShowToast("⚠️ Không tìm thấy dữ liệu người dùng trên Cloud!");
+  try {
+    const snap = await getDoc(userDocRef);
+
+    if (!snap.exists()) {
+      tinyToast("⚠️ Không có dữ liệu trên Cloud!");
       return;
     }
 
-    // ====== 1. Lấy task từ cloud ======
-    const data = docSnap.data();
+    const data = snap.data();
+
+    // -------------------------
+    // 🔹 LẤY TASK TỪ CLOUD
+    // -------------------------
     let cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
 
-    // ====== 2. Auto generate ID cho task cũ chưa có ID ======
+    // đảm bảo mỗi task có ID
     cloudTasks = cloudTasks.map(t => ({
-      id: t.id || crypto.randomUUID(),   // ⭐ Tạo ID nếu chưa có
+      id: t.id || crypto.randomUUID(),
       task: t.task,
       note: t.note || "",
       date: t.date,
       status: t.status || "pending"
     }));
 
-    console.log("☁️ Cloud tasks sau khi chuẩn hóa:", cloudTasks);
-
-    // ====== 3. Lấy dữ liệu local ======
+    // -------------------------
+    // 🔹 LẤY TASK LOCAL
+    // -------------------------
     let localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+    localTasks = localTasks.map(t => ({ id: t.id || crypto.randomUUID(), ...t }));
 
-    // Tạo ID cho local nếu thiếu (để tránh lỗi khi so sánh)
-    localTasks = localTasks.map(t => ({
-      id: t.id || crypto.randomUUID(),
-      ...t
-    }));
+    // -------------------------
+    // 🔹 MERGE THEO ID (không nhân đôi)
+    // -------------------------
+    const map = new Map();
 
-    // ====== 4. Merge theo ID ======
-    const merged = [...localTasks];
-    let addedCount = 0;
+    // local ưu tiên
+    localTasks.forEach(t => map.set(t.id, t));
 
-    cloudTasks.forEach(cloudItem => {
-      const exists = localTasks.some(local => local.id === cloudItem.id);
-      if (!exists) {
-        merged.push(cloudItem);
-        addedCount++;
+    // chỉ thêm Cloud nếu ID chưa tồn tại
+    cloudTasks.forEach(t => {
+      if (!map.has(t.id)) {
+        map.set(t.id, t);
       }
     });
 
-    // ====== 5. Lưu lại local ======
-    localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
-    window.tasks = merged;
+    const merged = [...map.values()];
 
-    // ====== 6. Đồng bộ ghi chú (nếu có) ======
+    // -------------------------
+    // 🔥 CHẶN AUTO-SYNC TRONG KHI GHI LOCAL
+    // -------------------------
+    window.__preventAutoSync = true;
+
+    localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+
+    // ghi ghi chú nếu có
     if (data.notes !== undefined) {
       localStorage.setItem(`ghiChu_${user}`, data.notes || "");
     }
 
-    console.log("🧩 Final merged tasks:", merged);
+    // cập nhật vào RAM
+    window.tasks = merged;
 
-    // ====== 7. Cập nhật UI ======
+    // mở khóa auto-sync sau 300ms để an toàn
+    setTimeout(() => {
+      window.__preventAutoSync = false;
+    }, 300);
+
+    // -------------------------
+    // 🔄 Cập nhật UI
+    // -------------------------
     if (typeof window.filterTasks === "function") {
       window.filterTasks();
     }
 
-    tinyShowToast(
-      addedCount > 0
-        ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
-        : "☁️ Dữ liệu đã cập nhật — không có gì mới."
-    );
+    tinyToast("⬇️ Đã tải dữ liệu từ Cloud về Local!");
 
-  } catch (err) {
-    console.error(err);
-    tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
+  } catch (e) {
+    console.error(e);
+    tinyToast("❌ Lỗi khi tải từ Firebase!");
   }
 };
 
-
-// ===== Toast nhỏ =====
-window.tinyShowToast = function (msg) {
-  const el = document.createElement("div");
-  el.textContent = msg;
-  Object.assign(el.style, {
-    position: "fixed",
-    bottom: "20px",
-    right: "20px",
-    background: "#2ecc71",
-    color: "white",
-    padding: "10px 15px",
-    borderRadius: "8px",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-    zIndex: 9999,
-    fontWeight: "bold"
-  });
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3500);
-  };
 </script>
 <!-- thêm user xoá user -->
 <script type="module">
