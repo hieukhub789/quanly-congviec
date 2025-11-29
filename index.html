@@ -2976,96 +2976,119 @@ function showSystemNotification(title, message, type = "info") {
 </script>
 
 <script type="module">
-  import { getFirestore, doc, getDoc } 
+  import { doc, getDoc } 
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  // 🔄 Đồng bộ từ Firestore về Local
-  window.syncFromFirebase = async function() {
-    const user = localStorage.getItem("currentUser") || window.currentUser || "nhi";
-    window.currentUser = user;
-    console.log("👤 Đồng bộ dữ liệu cho user:", user);
 
-    // 🔹 Truy cập document: users/{user}
-    const userDocRef = doc(window.db, "users", user);
-    console.log("📂 Truy cập Firestore document:", `users/${user}`);
+  // ============================================================
+  // 🔄  MERGE FIREBASE → LOCAL (THEO ID)
+  // ============================================================
+  window.syncFromFirebase = async function () {
+    const user =
+      localStorage.getItem("currentUser") ||
+      window.currentUser ||
+      "nhi";
+
+    window.currentUser = user;
+
+    console.log("🔄 Sync from Firebase → Local for user:", user);
+
+    const userRef = doc(window.db, "users", user);
 
     try {
-      const docSnap = await getDoc(userDocRef);
-
-      if (!docSnap.exists()) {
-        tinyShowToast("⚠️ Không tìm thấy dữ liệu người dùng này trên Cloud!");
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        tinyShowToast("⚠️ Không có dữ liệu trên cloud!");
         return;
       }
 
-      // 🔹 Lấy mảng tasks trong document
-      const data = docSnap.data();
+      const data = snap.data();
       const cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
-      console.log("📥 Dữ liệu tải từ Firebase:", cloudTasks);
+      console.log("🌩 Cloud tasks:", cloudTasks);
 
-      // 🔹 Lấy dữ liệu local hiện tại
-      const localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+      let localTasks =
+        JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-      // 🔹 So sánh và gộp (merge)
-      const merged = [...localTasks];
-      let addedCount = 0;
+      // 🔥 Tạo map theo ID cho nhanh
+      const localMap = new Map(localTasks.map(t => [t.id, t]));
 
-      cloudTasks.forEach(cloudTask => {
-        const exists = localTasks.some(
-          local =>
-            local.task === cloudTask.task &&
-            (local.note || "") === (cloudTask.note || "") &&
-            local.date === cloudTask.date
-        );
-        if (!exists) {
-          merged.push(cloudTask);
-          addedCount++;
+      let changed = false;
+
+      // MẢNG MỚI SAU MERGE
+      const merged = [];
+
+      // ============================================================
+      // 1) DUYỆT QUA TẤT CẢ CLOUD TASKS
+      // ============================================================
+      cloudTasks.forEach(cloud => {
+        const local = localMap.get(cloud.id);
+
+        if (!local) {
+          // 👉 LOCAL KHÔNG CÓ → THÊM MỚI
+          merged.push(cloud);
+          changed = true;
+        } else {
+          // 👉 CẢ 2 CÓ ID — KIỂM TRA SAI KHÁC
+          const updated = { ...local };
+
+          let needUpdate = false;
+
+          // So sánh từng trường quan trọng
+          const fields = ["task", "note", "status", "date", "pinned"];
+
+          fields.forEach(f => {
+            if (cloud[f] !== undefined && cloud[f] !== local[f]) {
+              updated[f] = cloud[f];
+              needUpdate = true;
+            }
+          });
+
+          if (needUpdate) changed = true;
+
+          merged.push(updated);
         }
+
+        // đánh dấu ID đã xử lý
+        localMap.delete(cloud.id);
       });
 
-      // 🔹 Cập nhật lại Local nếu có dữ liệu mới
-      // 🔹 Cập nhật lại LocalStorage (nếu có dữ liệu mới)
-if (addedCount > 0) {
-  localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
-  window.tasks = merged;
-} else {
-  // nếu không có dữ liệu mới, vẫn cần đồng bộ window.tasks từ local
-  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-}
-// 🆕 🔹 Đồng bộ ghi chú (notes)
-if (data.notes !== undefined) {
-  localStorage.setItem("ghiChu", data.notes || "");
-  console.log("🗒️ Đã cập nhật ghi chú từ Firebase:", data.notes);
-}
+      // ============================================================
+      // 2) TASK CHỈ CÓ LOCAL (có thể do máy này tạo)
+      // ============================================================
+      localMap.forEach((localOnlyTask) => {
+        merged.push(localOnlyTask); // giữ nguyên
+      });
 
-// ✅ Luôn cập nhật giao diện
-if (typeof window.filterTasks === "function") window.filterTasks();
-window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+      // ============================================================
+      // 3) LƯU LẠI LOCAL
+      // ============================================================
+      localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+      window.tasks = merged;
 
-  // 🔹 Log kiểm tra
-  console.log("🧩 Kiểm tra window.tasks sau sync:", window.tasks);
+      if (changed) {
+        tinyShowToast("📥 Đã cập nhật dữ liệu từ Cloud!");
+      } else {
+        tinyShowToast("☁️ Không có gì mới trên Cloud");
+      }
 
-  // ✅ Luôn render lại danh sách
-  if (typeof window.filterTasks === "function") {
-    console.log("🔁 Gọi filterTasks() để cập nhật UI");
-    window.filterTasks();
-  } else {
-    console.warn("⚠️ Không tìm thấy hàm filterTasks!");
-  }
+      // Render UI
+      if (typeof window.filterTasks === "function") {
+        window.filterTasks();
+      }
 
-tinyShowToast(
-  addedCount > 0
-    ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
-    : "☁️ Dữ liệu đã được cập nhật, không có gì mới."
-);
+      console.log("🎯 Tasks sau merge:", merged);
 
     } catch (err) {
-      console.error(err);
-      tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
+      console.error("❌ Lỗi syncFromFirebase:", err);
+      tinyShowToast("❌ Lỗi khi tải dữ liệu từ Cloud!");
     }
   };
 
-  // 🔔 Thông báo nhỏ gọn
-  window.tinyShowToast = function(msg) {
+
+  // ============================================================
+  // Toast nhỏ
+  // ============================================================
+  window.tinyShowToast = function (msg) {
     const el = document.createElement("div");
     el.textContent = msg;
     Object.assign(el.style, {
@@ -3076,14 +3099,14 @@ tinyShowToast(
       color: "white",
       padding: "10px 15px",
       borderRadius: "8px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-      zIndex: 9999,
-      fontWeight: "bold"
+      fontWeight: "bold",
+      zIndex: 99999
     });
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 3500);
+    setTimeout(() => el.remove(), 3000);
   };
 </script>
+
 <!-- thêm user xoá user -->
 <script type="module">
 import { 
