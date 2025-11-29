@@ -1187,14 +1187,12 @@ function isLocalStorageFull(data) {
   }
 
   const newTask = {
-    id: crypto.randomUUID(),   // ⭐ THÊM DÒNG NÀY
-    date: ngay,
-    note: ghichu,
-    pinned: false,
-    status: "Chưa hoàn thành",
-    task: noidung
-};
-
+    task,
+    note,
+    status: "Chưa làm",
+    date: new Date().toLocaleDateString("vi-VN"),
+    pinned: false // 🆕 mặc định công việc mới chưa ghim
+  };
 
   const tempData = JSON.stringify([newTask, ...tasks]);
 
@@ -1514,8 +1512,8 @@ function toggleEditTask() {
   const modalStatus = document.getElementById("modalStatus");
   const editSaveBtn = document.getElementById("editSaveBtn");
 
-  // --- Nếu đang ở chế độ xem → chuyển sang chế độ sửa ---
   if (!isEditing) {
+    // Bật chế độ chỉnh sửa
     taskDiv.contentEditable = "true";
     noteDiv.contentEditable = "true";
     taskDiv.style.backgroundColor = "#fff";
@@ -1524,85 +1522,51 @@ function toggleEditTask() {
 
     editSaveBtn.textContent = "Lưu";
     isEditing = true;
-    return;
+  } else {
+    // Lưu thay đổi
+    const updatedTask = taskDiv.innerText.trim();
+    const updatedNote = noteDiv.innerText.trim();
+    const updatedStatus = modalStatus.value;
+
+    if (updatedTask === "") {
+      alert("Công việc không được để trống!");
+      return;
+    }
+
+    // Cập nhật đúng công việc hiện tại
+    tasks[currentDetailIndex].task = updatedTask;
+    tasks[currentDetailIndex].note = updatedNote;
+    tasks[currentDetailIndex].status = updatedStatus;
+
+    saveToLocalStorage();
+    filterTasks();
+    showDetails(currentDetailIndex);
+
+    editSaveBtn.textContent = "Sửa";
+    isEditing = false;
+
+    // Đóng khóa chỉnh sửa
+    taskDiv.contentEditable = "false";
+    noteDiv.contentEditable = "false";
+    taskDiv.style.backgroundColor = "#e0e0e0";
+    noteDiv.style.backgroundColor = "#e0e0e0";
+    modalStatus.disabled = true;
   }
-
-  // --- Ngược lại: lưu dữ liệu đã sửa ---
-  const updatedTask = taskDiv.innerText.trim();
-  const updatedNote = noteDiv.innerText.trim();
-  const updatedStatus = modalStatus.value;
-
-  if (updatedTask === "") {
-    alert("Công việc không được để trống!");
-    return;
-  }
-
-  // Thêm id nếu task chưa có
-  if (!tasks[currentDetailIndex].id) {
-    tasks[currentDetailIndex].id = crypto.randomUUID();
-  }
-  const editedId = tasks[currentDetailIndex].id;
-
-  // GHI DỮ LIỆU MỚI
-  tasks[currentDetailIndex].task = updatedTask;
-  tasks[currentDetailIndex].note = updatedNote;
-  tasks[currentDetailIndex].status = updatedStatus;
-
-  // LƯU LOCAL
-  saveToLocalStorage();
-
-  // Render lại UI (có lọc/sort)
-  filterTasks();
-
-  // 🔥 SAU KHI RENDER: tìm lại task bằng ID để modal không bị nhảy sai
-  const newIndex = tasks.findIndex(t => t.id === editedId);
-  if (newIndex !== -1) {
-    currentDetailIndex = newIndex;
-    showDetails(newIndex);  // mở lại modal với dữ liệu đã chỉnh
-  }
-
-  // Tắt chế độ chỉnh sửa
-  taskDiv.contentEditable = "false";
-  noteDiv.contentEditable = "false";
-  taskDiv.style.backgroundColor = "#e0e0e0";
-  noteDiv.style.backgroundColor = "#e0e0e0";
-  modalStatus.disabled = true;
-
-  editSaveBtn.textContent = "Sửa";
-  isEditing = false;
 }
-
   // xóa chi tiết
   function openDeleteConfirmation() {
     document.getElementById("confirmDeleteModal").style.display = "block";
   }
 
   function confirmDelete() {
-  const username =
-    window.currentUser ||
-    localStorage.getItem("currentUser") ||
-    "default";
-
-  const taskId = tasks[currentDetailIndex].id;
-
-  // Xoá theo ID để tránh xoá nhầm khi thứ tự khác nhau
-  tasks = tasks.filter(t => t.id !== taskId);
-
-  // Lưu lại
-  localStorage.setItem(`tasks_${username}`, JSON.stringify(tasks));
-
-  // Đồng bộ Firebase
-  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
-
-  // Render lại UI
-  filterTasks();
-  closeModal("detailModal");
-  closeModal("confirmDeleteModal");
-  showToast("🗑️ Đã xoá công việc!");
-
-  currentDetailIndex = -1;
-}
-
+    tasks.splice(currentDetailIndex, 1);
+    saveToLocalStorage();
+    filterTasks();
+    closeModal("detailModal");
+    closeModal("confirmDeleteModal");
+    showToast("Đã xoá công việc!");
+    if (currentDetailIndex === -1) return;
+  }
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
@@ -2864,17 +2828,18 @@ function showSystemNotification(title, message, type = "info") {
 
 <!-- Auto-sync to Firestore (injected by assistant) -->
 <script type="module">
-  import { setDoc, doc, deleteDoc, getDoc, getDocs  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { setDoc, doc, getDoc } 
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const db = window.db;
 
-  // Simple toast helper (uses existing showToast if present, otherwise fallback)
+  /* ============================================================
+        TOAST NHỎ
+  ============================================================ */
   function tinyToast(msg) {
-    try { if (typeof showToast === 'function') return showToast(msg); } catch(e){}
-    // fallback small temporary toast
-    const c = document.getElementById('toastContainer') || document.body;
-    const t = document.createElement('div');
-    t.style = "position:fixed;right:20px;bottom:20px;background:#2e7d32;color:#fff;padding:8px 12px;border-radius:6px;z-index:99999;box-shadow:0 3px 8px rgba(0,0,0,0.2);font-size:13px";
+    try { if (typeof showToast === "function") return showToast(msg); } catch(e){}
+    const t = document.createElement("div");
+    t.style = "position:fixed;right:20px;bottom:20px;background:#2e7d32;color:white;padding:8px 14px;border-radius:8px;z-index:999999";
     t.innerText = msg;
     document.body.appendChild(t);
     setTimeout(()=>t.remove(),3000);
@@ -2883,227 +2848,241 @@ function showSystemNotification(title, message, type = "info") {
   let dataChanged = false;
   let syncInProgress = false;
 
-  // mark changed
   function dataChangedFlagSet(){
     dataChanged = true;
     tryAutoSync();
   }
 
-  // Try to auto sync if online
   function tryAutoSync(){
-    if (navigator.onLine && dataChanged && !syncInProgress) {
+    if (navigator.onLine && dataChanged && !syncInProgress){
       syncToFirestoreAll();
     }
   }
 
-  // Override localStorage.setItem to mark changes (non-destructive)
+  /* ============================================================
+        INTERCEPT localStorage.setItem
+  ============================================================ */
   (function(){
-    const origSet = localStorage.setItem.bind(localStorage);
+    const orig = localStorage.setItem.bind(localStorage);
     localStorage.setItem = function(k,v){
-      origSet(k,v);
-      if (k.startsWith('tasks_') || k === 'repairs' || k === 'notes' || k === 'noiDungGhiChu') {
+      orig(k,v);
+      if (k.startsWith("tasks_") || k === "repairs" || k === "notes" || k === "noiDungGhiChu") {
         dataChangedFlagSet();
       }
       return true;
     };
   })();
 
-  // Core: delete doc then set doc for each user document
+
+  /* ============================================================
+        HÀM ĐỒNG BỘ LOCAL → CLOUD  (CÓ THÊM ID)
+  ============================================================ */
   async function syncToFirestoreAll(){
-    if (!db) {
-      console.warn('Firestore not initialized');
-      return;
-    }
-    if (window.__preventAutoSync) return;// chặn moda sua xe
-
+    if (!db) return console.warn("Firestore not initialized");
+    if (window.__preventAutoSync) return; 
     if (syncInProgress) return;
+
     syncInProgress = true;
-    tinyToast('🔄 Đồng bộ Firebase...');
+    tinyToast("🔄 Đồng bộ Firebase...");
 
-   try {
-  // collect all users from localStorage keys tasks_*
-  const users = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith("tasks_")) {
-      users.push(key.replace("tasks_", ""));
-    }
-  }
-
-  // make unique
-  const uniqUsers = Array.from(new Set(users));
-
-  // 🔄 Đồng bộ từng user an toàn (merge, không ghi đè ghi chú)
-  for (const username of uniqUsers) {
-    const tasks = JSON.parse(localStorage.getItem("tasks_" + username) || "[]");
-     const repairs = JSON.parse(localStorage.getItem("repairs_" + username) || "[]");
-
-
-    // 🔹 Lấy ghi chú theo user (ưu tiên per-user)
-    const perUserNoteKey = `ghiChu_${username}`;
-    const localNote =
-      localStorage.getItem(perUserNoteKey) ||
-      localStorage.getItem("noiDungGhiChu") ||
-      localStorage.getItem("notes") ||
-      "";
-
-    const userRef = doc(db, "users", username);
     try {
-      const snap = await getDoc(userRef);
-      const cloudData = snap.exists() ? snap.data() : {};
+      // Lấy danh sách user trong local
+      const users = [];
+      for (let i=0;i<localStorage.length;i++){
+        const key = localStorage.key(i);
+        if (key.startsWith("tasks_")) users.push(key.replace("tasks_",""));
+      }
+      const uniqUsers = Array.from(new Set(users));
 
-      // 🔸 Chọn ghi chú cuối cùng hợp lý nhất
-      let finalNote = cloudData.notes || "";
-      if (localNote && localNote.trim() !== "") {
-        finalNote = localNote; // Local có nội dung thì ưu tiên
-      } else if (!localNote && cloudData.notes) {
-        // Local trống, Cloud có → giữ Cloud và cập nhật local
-        localStorage.setItem(perUserNoteKey, cloudData.notes);
-        finalNote = cloudData.notes;
+
+      for (const username of uniqUsers){
+
+        let tasks = JSON.parse(localStorage.getItem("tasks_" + username) || "[]");
+        const repairs = JSON.parse(localStorage.getItem("repairs_" + username) || "[]");
+
+        /* ------------------------------------------------------------
+             ⭐ BỔ SUNG ID CHO TỪNG TASK (CHỈ LOCAL)
+           ------------------------------------------------------------ */
+        tasks = tasks.map(task => {
+          if (!task.id) {
+            task.id = "task_" + Date.now() + "_" + Math.random().toString(36).substring(2,8);
+          }
+          return task;
+        });
+
+        // lưu lại local sau khi thêm id
+        localStorage.setItem("tasks_" + username, JSON.stringify(tasks));
+
+
+        // xử lý notes
+        const perUserNoteKey = `ghiChu_${username}`;
+        const localNote =
+          localStorage.getItem(perUserNoteKey) ||
+          localStorage.getItem("noiDungGhiChu") ||
+          localStorage.getItem("notes") ||
+          "";
+
+        const userRef = doc(db, "users", username);
+
+        try {
+          const snap = await getDoc(userRef);
+          const cloudData = snap.exists() ? snap.data() : {};
+
+          let finalNote = cloudData.notes || "";
+          if (localNote.trim() !== "") finalNote = localNote;
+          else if (!localNote && cloudData.notes) {
+            localStorage.setItem(perUserNoteKey, cloudData.notes);
+            finalNote = cloudData.notes;
+          }
+
+          // payload
+          const payload = {
+            username,
+            tasks,
+            notes: finalNote,
+            lastSync: new Date().toISOString(),
+          };
+
+          // Không ghi đè repairs nếu local rỗng
+          if (Array.isArray(repairs) && repairs.length > 0){
+            payload.repairs = repairs;
+          }
+
+          await setDoc(userRef, payload, { merge: true });
+          console.log(`✔ Synced user ${username}`);
+
+        } catch(err){
+          console.warn("Sync error user", username, err);
+        }
       }
 
-      // ---- AN TOÀN CHO TASKS & NOTES ----
-const payload = {
-  username,
-  tasks,             // giữ nguyên
-  notes: finalNote,  // giữ nguyên
-  lastSync: new Date().toISOString(),
-};
+      tinyToast("✅ Đồng bộ Firebase thành công");
+      dataChanged = false;
 
-// ---- FIX KHÔNG GHI ĐÈ REPAIRS ----
-// Chỉ ghi lên Cloud nếu local có dữ liệu thật
-if (Array.isArray(repairs) && repairs.length > 0) {
-  payload.repairs = repairs;
-}
-
-// ---- Ghi merge ----
-await setDoc(userRef, payload, { merge: true });
-
-
-      console.log(`✅ Đồng bộ user ${username}: note="${finalNote}"`);
-    } catch (e) {
-      console.warn("⚠️ Lỗi đồng bộ user", username, e);
+    } catch(err){
+      console.error(err);
+      tinyToast("❌ Lỗi khi đồng bộ Firebase");
     }
+
+    syncInProgress = false;
   }
 
-  tinyToast("✅ Đồng bộ Firebase thành công");
-  dataChanged = false;
-} catch (err) {
-  console.error("Sync error", err);
-  tinyToast("⚠️ Lỗi đồng bộ Firebase");
-} finally {
-  syncInProgress = false;
-}
 
-  }
+  window.addEventListener("online", tryAutoSync);
+  window.addEventListener("load", tryAutoSync);
 
-  // sync on online event and on load if online
-  window.addEventListener('online', tryAutoSync);
-  window.addEventListener('load', () => { tryAutoSync(); });
-
-  // expose for manual control if needed
   window.syncToFirestoreAll = syncToFirestoreAll;
   window.dataChangedFlagSet = dataChangedFlagSet;
-
-
-  
 </script>
+
 <script type="module">
   import { getFirestore, doc, getDoc } 
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // 🔄 Đồng bộ từ Firestore về Local
-  
-  window.syncFromFirebase = async function () {
-  const user = window.currentUser || localStorage.getItem("currentUser") || "nhi";
-  window.currentUser = user;
+  window.syncFromFirebase = async function() {
+    const user = localStorage.getItem("currentUser") || window.currentUser || "nhi";
+    window.currentUser = user;
+    console.log("👤 Đồng bộ dữ liệu cho user:", user);
 
-  const userDocRef = doc(window.db, "users", user);
+    // 🔹 Truy cập document: users/{user}
+    const userDocRef = doc(window.db, "users", user);
+    console.log("📂 Truy cập Firestore document:", `users/${user}`);
 
-  console.log("⬇️ Sync FROM Firebase cho user:", user);
+    try {
+      const docSnap = await getDoc(userDocRef);
 
-  try {
-    const snap = await getDoc(userDocRef);
-
-    if (!snap.exists()) {
-      tinyToast("⚠️ Không có dữ liệu trên Cloud!");
-      return;
-    }
-
-    const data = snap.data();
-
-    // -------------------------
-    // 🔹 LẤY TASK TỪ CLOUD
-    // -------------------------
-    let cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
-
-    // đảm bảo mỗi task có ID
-    cloudTasks = cloudTasks.map(t => ({
-      id: t.id || crypto.randomUUID(),
-      task: t.task,
-      note: t.note || "",
-      date: t.date,
-      status: t.status || "pending"
-    }));
-
-    // -------------------------
-    // 🔹 LẤY TASK LOCAL
-    // -------------------------
-    let localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-    localTasks = localTasks.map(t => ({ id: t.id || crypto.randomUUID(), ...t }));
-
-    // -------------------------
-    // 🔹 MERGE THEO ID (không nhân đôi)
-    // -------------------------
-    const map = new Map();
-
-    // local ưu tiên
-    localTasks.forEach(t => map.set(t.id, t));
-
-    // chỉ thêm Cloud nếu ID chưa tồn tại
-    cloudTasks.forEach(t => {
-      if (!map.has(t.id)) {
-        map.set(t.id, t);
+      if (!docSnap.exists()) {
+        tinyShowToast("⚠️ Không tìm thấy dữ liệu người dùng này trên Cloud!");
+        return;
       }
-    });
 
-    const merged = [...map.values()];
+      // 🔹 Lấy mảng tasks trong document
+      const data = docSnap.data();
+      const cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
+      console.log("📥 Dữ liệu tải từ Firebase:", cloudTasks);
 
-    // -------------------------
-    // 🔥 CHẶN AUTO-SYNC TRONG KHI GHI LOCAL
-    // -------------------------
-    window.__preventAutoSync = true;
+      // 🔹 Lấy dữ liệu local hiện tại
+      const localTasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-    localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+      // 🔹 So sánh và gộp (merge)
+      const merged = [...localTasks];
+      let addedCount = 0;
 
-    // ghi ghi chú nếu có
-    if (data.notes !== undefined) {
-      localStorage.setItem(`ghiChu_${user}`, data.notes || "");
-    }
+      cloudTasks.forEach(cloudTask => {
+        const exists = localTasks.some(
+          local =>
+            local.task === cloudTask.task &&
+            (local.note || "") === (cloudTask.note || "") &&
+            local.date === cloudTask.date
+        );
+        if (!exists) {
+          merged.push(cloudTask);
+          addedCount++;
+        }
+      });
 
-    // cập nhật vào RAM
-    window.tasks = merged;
+      // 🔹 Cập nhật lại Local nếu có dữ liệu mới
+      // 🔹 Cập nhật lại LocalStorage (nếu có dữ liệu mới)
+if (addedCount > 0) {
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(merged));
+  window.tasks = merged;
+} else {
+  // nếu không có dữ liệu mới, vẫn cần đồng bộ window.tasks từ local
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+}
+// 🆕 🔹 Đồng bộ ghi chú (notes)
+if (data.notes !== undefined) {
+  localStorage.setItem("ghiChu", data.notes || "");
+  console.log("🗒️ Đã cập nhật ghi chú từ Firebase:", data.notes);
+}
 
-    // mở khóa auto-sync sau 300ms để an toàn
-    setTimeout(() => {
-      window.__preventAutoSync = false;
-    }, 300);
+// ✅ Luôn cập nhật giao diện
+if (typeof window.filterTasks === "function") window.filterTasks();
+window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-    // -------------------------
-    // 🔄 Cập nhật UI
-    // -------------------------
-    if (typeof window.filterTasks === "function") {
-      window.filterTasks();
-    }
+  // 🔹 Log kiểm tra
+  console.log("🧩 Kiểm tra window.tasks sau sync:", window.tasks);
 
-    tinyToast("⬇️ Đã tải dữ liệu từ Cloud về Local!");
-
-  } catch (e) {
-    console.error(e);
-    tinyToast("❌ Lỗi khi tải từ Firebase!");
+  // ✅ Luôn render lại danh sách
+  if (typeof window.filterTasks === "function") {
+    console.log("🔁 Gọi filterTasks() để cập nhật UI");
+    window.filterTasks();
+  } else {
+    console.warn("⚠️ Không tìm thấy hàm filterTasks!");
   }
-};
 
+tinyShowToast(
+  addedCount > 0
+    ? `✅ Đồng bộ thành công — thêm ${addedCount} công việc mới.`
+    : "☁️ Dữ liệu đã được cập nhật, không có gì mới."
+);
+
+    } catch (err) {
+      console.error(err);
+      tinyShowToast("❌ Lỗi khi tải dữ liệu từ Firebase!");
+    }
+  };
+
+  // 🔔 Thông báo nhỏ gọn
+  window.tinyShowToast = function(msg) {
+    const el = document.createElement("div");
+    el.textContent = msg;
+    Object.assign(el.style, {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      background: "#2ecc71",
+      color: "white",
+      padding: "10px 15px",
+      borderRadius: "8px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+      zIndex: 9999,
+      fontWeight: "bold"
+    });
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  };
 </script>
 <!-- thêm user xoá user -->
 <script type="module">
