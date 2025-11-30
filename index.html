@@ -1566,14 +1566,25 @@ function toggleEditTask() {
   }
 
   function confirmDelete() {
-    tasks.splice(currentDetailIndex, 1);
-    saveToLocalStorage();
-    filterTasks();
-    closeModal("detailModal");
-    closeModal("confirmDeleteModal");
-    showToast("Đã xoá công việc!");
-    if (currentDetailIndex === -1) return;
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  const index = window.tasks.findIndex(t => t.id === currentDetailId);
+  if (index === -1) {
+    showToast("Không tìm thấy công việc để xoá!");
+    return;
   }
+
+  window.tasks.splice(index, 1);
+
+  saveToLocalStorage();
+  syncAllTasksToCloud(); // an toàn vì xoá đúng dòng thật
+  closeModal("detailModal"); 
+  closeModal("confirmDeleteModal"); 
+  showToast("Đã xoá công việc!");
+  filterTasks();
+}
+
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
