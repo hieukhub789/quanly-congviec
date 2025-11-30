@@ -1565,14 +1565,38 @@ function toggleEditTask() {
   }
 
   function confirmDelete() {
-    tasks.splice(currentDetailIndex, 1);
-    saveToLocalStorage();
-    filterTasks();
-    closeModal("detailModal");
-    closeModal("confirmDeleteModal");
-    showToast("Đã xoá công việc!");
-    if (currentDetailIndex === -1) return;
+  const user = window.currentUser || localStorage.getItem("currentUser");
+
+  // 🔥 1. Load lại bản mới nhất từ localStorage (tránh window.tasks bị rỗng)
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  if (currentDetailIndex < 0 || currentDetailIndex >= window.tasks.length) {
+    showToast("Không tìm thấy công việc để xoá!");
+    return;
   }
+
+  // 🔥 2. Xóa task đúng index
+  window.tasks.splice(currentDetailIndex, 1);
+
+  // 🔥 3. Lưu lại an toàn
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+
+  // 🔥 4. Đồng bộ lại window.tasks sau lưu
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  // 🔄 5. Cập nhật UI
+  filterTasks();
+
+  // 🔒 6. Đóng modal
+  closeModal("detailModal");
+  closeModal("confirmDeleteModal");
+
+  showToast("Đã xoá công việc!");
+
+  // Reset index
+  currentDetailIndex = -1;
+}
+
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
