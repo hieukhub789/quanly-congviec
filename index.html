@@ -1107,8 +1107,7 @@ function filterTasks() {
     `;
 
     // Tìm index thực của task trong window.tasks (an toàn hơn indexOf khi objects là cùng tham chiếu)
-    const realIndex = window.tasks.findIndex(t => t.id && taskObj.id ? t.id === taskObj.id : (t.task===taskObj.task && t.date===taskObj.date));
-
+    const realIndex = window.tasks.indexOf(taskObj);
 
     row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
       e.preventDefault();
@@ -1566,25 +1565,14 @@ function toggleEditTask() {
   }
 
   function confirmDelete() {
-  const user = window.currentUser || localStorage.getItem("currentUser");
-  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-  const index = window.tasks.findIndex(t => t.id === currentDetailId);
-  if (index === -1) {
-    showToast("Không tìm thấy công việc để xoá!");
-    return;
+    tasks.splice(currentDetailIndex, 1);
+    saveToLocalStorage();
+    filterTasks();
+    closeModal("detailModal");
+    closeModal("confirmDeleteModal");
+    showToast("Đã xoá công việc!");
+    if (currentDetailIndex === -1) return;
   }
-
-  window.tasks.splice(index, 1);
-
-  saveToLocalStorage();
-  syncAllTasksToCloud(); // an toàn vì xoá đúng dòng thật
-  closeModal("detailModal"); 
-  closeModal("confirmDeleteModal"); 
-  showToast("Đã xoá công việc!");
-  filterTasks();
-}
-
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
