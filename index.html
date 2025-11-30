@@ -1115,9 +1115,13 @@ function filterTasks() {
     };
 
     row.onclick = (e) => {
-      if (e.target.tagName.toLowerCase() === "button") return;
-      if (typeof showDetails === "function") showDetails(realIndex);
-    };
+  if (e.target.tagName.toLowerCase() === "button") return;
+
+  // taskObj chính là object hiện tại trong vòng lặp
+  if (typeof showDetails === "function") showDetails(taskObj.id);
+};
+
+
 
     tableBody.appendChild(row);
      
