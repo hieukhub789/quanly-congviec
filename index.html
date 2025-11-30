@@ -1517,6 +1517,7 @@ function toggleEditTask() {
   const noteDiv = document.getElementById("modalNote");
   const modalStatus = document.getElementById("modalStatus");
   const editSaveBtn = document.getElementById("editSaveBtn");
+  const user = window.currentUser || localStorage.getItem("currentUser");
 
   if (!isEditing) {
     // Bật chế độ chỉnh sửa
@@ -1529,7 +1530,16 @@ function toggleEditTask() {
     editSaveBtn.textContent = "Lưu";
     isEditing = true;
   } else {
-    // Lưu thay đổi
+    // 🔥 1. Load lại bản mới nhất từ localStorage
+    window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+    // 🔥 2. Kiểm tra index còn đúng không
+    if (currentDetailIndex < 0 || currentDetailIndex >= window.tasks.length) {
+      alert("Không tìm thấy công việc để sửa!");
+      return;
+    }
+
+    // 3. Lấy dữ liệu mới
     const updatedTask = taskDiv.innerText.trim();
     const updatedNote = noteDiv.innerText.trim();
     const updatedStatus = modalStatus.value;
@@ -1539,26 +1549,34 @@ function toggleEditTask() {
       return;
     }
 
-    // Cập nhật đúng công việc hiện tại
-    tasks[currentDetailIndex].task = updatedTask;
-    tasks[currentDetailIndex].note = updatedNote;
-    tasks[currentDetailIndex].status = updatedStatus;
+    // 🔥 4. Sửa đúng task
+    window.tasks[currentDetailIndex].task = updatedTask;
+    window.tasks[currentDetailIndex].note = updatedNote;
+    window.tasks[currentDetailIndex].status = updatedStatus;
 
-    saveToLocalStorage();
+    // 🔥 5. Lưu lại
+    localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+
+    // 🔄 6. Reload tasks sau lưu
+    window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+    // 🔄 7. Render lại UI
     filterTasks();
     showDetails(currentDetailIndex);
 
+    // Tắt chế độ edit
     editSaveBtn.textContent = "Sửa";
     isEditing = false;
-
-    // Đóng khóa chỉnh sửa
     taskDiv.contentEditable = "false";
     noteDiv.contentEditable = "false";
     taskDiv.style.backgroundColor = "#e0e0e0";
     noteDiv.style.backgroundColor = "#e0e0e0";
     modalStatus.disabled = true;
+
+    showToast("Đã cập nhật công việc!");
   }
 }
+
   // xóa chi tiết
   function openDeleteConfirmation() {
     document.getElementById("confirmDeleteModal").style.display = "block";
