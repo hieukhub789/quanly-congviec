@@ -1173,54 +1173,61 @@ function isLocalStorageFull(data) {
 
 
   function addTask() {
-  const task = document.getElementById("taskInput").value.trim();
-  const note = document.getElementById("noteInput").value.trim();
+  const user = window.currentUser || localStorage.getItem("currentUser") || "default";
+
+  const taskText = document.getElementById("taskInput").value.trim();
+  const noteText = document.getElementById("noteInput").value.trim();
 
   if (isStorageFull) {
     showToast("Không thể thêm vì bộ nhớ đã đầy.");
     return;
   }
 
-  if (task === "") {
+  if (taskText === "") {
     alert("Vui lòng nhập công việc!");
     return;
   }
 
+  // 🆕 TẠO ID CHUẨN CHO TASK
   const newTask = {
-    task,
-    note,
+    id: "task_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8),
+    task: taskText,
+    note: noteText,
     status: "Chưa làm",
     date: new Date().toLocaleDateString("vi-VN"),
-    pinned: false // 🆕 mặc định công việc mới chưa ghim
+    pinned: false
   };
 
+  // Kiểm tra dung lượng trước khi thêm
   const tempData = JSON.stringify([newTask, ...tasks]);
-
   if (isLocalStorageFull(tempData)) {
     showToast("Bộ nhớ gần đầy! Không thể thêm công việc.");
     disableAddButton();
     return;
   }
 
+  // 🆕 Thêm vào đầu danh sách
   tasks.unshift(newTask);
-  saveToLocalStorage();
-  filterTasks();
-  // 🔄 Cập nhật biến toàn cục để UI phản ánh ngay
-window.tasks = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
 
-// 🔁 Vẽ lại bảng
-if (typeof window.filterTasks === "function") {
-  window.filterTasks();
-}
+  // 🆕 Lưu đúng user
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(tasks));
 
+  // 🆕 Đánh dấu thay đổi để auto sync
+  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
 
+  // 🆕 Load lại biến global từ local (cho UI dùng bản mới)
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  // 🆕 Render lại UI (gọi đúng 1 lần)
+  if (typeof window.filterTasks === "function") window.filterTasks();
+
+  // Reset input
   document.getElementById("taskInput").value = "";
   document.getElementById("noteInput").value = "";
-  showToast("Đã thêm công việc mới.");
-  
 
-  
+  showToast("Đã thêm công việc mới.");
 }
+
 
 
 
