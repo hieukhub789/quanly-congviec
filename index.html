@@ -1310,7 +1310,11 @@ if (typeof window.filterTasks === "function") {
 
 
 
-    function showDetails(index) {
+  function showDetails(taskId) {
+  // tìm theo id
+  const index = tasks.findIndex(t => t.id === taskId);
+  if (index === -1) return;
+
   currentDetailIndex = index;
   const task = tasks[index];
 
@@ -1319,14 +1323,13 @@ if (typeof window.filterTasks === "function") {
   document.getElementById("modalNote").innerText = task.note;
   document.getElementById("modalDate").value = task.date || "";
 
-
-  // Gán trạng thái vào dropdown
+  // trạng thái
   const modalStatus = document.getElementById("modalStatus");
   const status = (task.status || "").trim().toLowerCase();
   const validStatuses = ["chưa làm", "đang làm", "hoàn thành"];
   modalStatus.value = validStatuses.includes(status) ? capitalize(status) : "Chưa làm";
 
-  // Reset chế độ chỉnh sửa
+  // reset edit mode
   const taskDiv = document.getElementById("modalTask");
   const noteDiv = document.getElementById("modalNote");
   const editBtn = document.getElementById("editSaveBtn");
@@ -1341,6 +1344,7 @@ if (typeof window.filterTasks === "function") {
 
   document.getElementById("detailModal").style.display = "block";
 }
+
 
 // Hàm hỗ trợ viết hoa chữ cái đầu
 function capitalize(str) {
