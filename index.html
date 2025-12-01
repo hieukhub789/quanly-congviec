@@ -1579,41 +1579,45 @@ function toggleEditTask() {
 
   // xóa chi tiết
   function openDeleteConfirmation() {
-    document.getElementById("confirmDeleteModal").style.display = "block";
-  }
+  document.getElementById("confirmDeleteModal").style.display = "block";
+}
 
-  function confirmDelete() {
+function confirmDelete() {
   const user = window.currentUser || localStorage.getItem("currentUser");
 
-  // 🔥 1. Load lại bản mới nhất từ localStorage (tránh window.tasks bị rỗng)
-  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+  // 1️⃣ Load lại tasks mới nhất từ local
+  const tasksLocal = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-  if (currentDetailIndex < 0 || currentDetailIndex >= window.tasks.length) {
-    showToast("Không tìm thấy công việc để xoá!");
+  // 2️⃣ Lấy đúng task theo chỉ số đang xem ở modal
+  const task = window.tasks[currentDetailIndex];
+  if (!task) {
+    showToast("❌ Không tìm thấy công việc để xóa!");
     return;
   }
 
-  // 🔥 2. Xóa task đúng index
-  window.tasks.splice(currentDetailIndex, 1);
+  const idToDelete = task.id; // 🔥 XÓA THEO ID — CHUẨN NHẤT
 
-  // 🔥 3. Lưu lại an toàn
-  localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+  // 3️⃣ Xóa trong bản local theo ID
+  const newList = tasksLocal.filter(t => t.id !== idToDelete);
 
-  // 🔥 4. Đồng bộ lại window.tasks sau lưu
-  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+  // 4️⃣ Lưu lại
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(newList));
 
-  // 🔄 5. Cập nhật UI
-  filterTasks();
+  // 5️⃣ Cập nhật lại danh sách global
+  window.tasks = newList;
 
-  // 🔒 6. Đóng modal
+  // 6️⃣ Render UI lại
+  if (typeof filterTasks === "function") filterTasks();
+
+  // 7️⃣ Đóng modal
   closeModal("detailModal");
   closeModal("confirmDeleteModal");
 
-  showToast("Đã xoá công việc!");
+  showToast("🗑️ Đã xoá công việc!");
 
-  // Reset index
   currentDetailIndex = -1;
 }
+
 
 
   // function closeModal(id) {
