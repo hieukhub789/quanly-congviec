@@ -1517,7 +1517,6 @@ function toggleEditTask() {
   const noteDiv = document.getElementById("modalNote");
   const modalStatus = document.getElementById("modalStatus");
   const editSaveBtn = document.getElementById("editSaveBtn");
-  const user = window.currentUser || localStorage.getItem("currentUser");
 
   if (!isEditing) {
     // Bật chế độ chỉnh sửa
@@ -1530,16 +1529,7 @@ function toggleEditTask() {
     editSaveBtn.textContent = "Lưu";
     isEditing = true;
   } else {
-    // 🔥 1. Load lại bản mới nhất từ localStorage
-    window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-    // 🔥 2. Kiểm tra index còn đúng không
-    if (currentDetailIndex < 0 || currentDetailIndex >= window.tasks.length) {
-      alert("Không tìm thấy công việc để sửa!");
-      return;
-    }
-
-    // 3. Lấy dữ liệu mới
+    // Lưu thay đổi
     const updatedTask = taskDiv.innerText.trim();
     const updatedNote = noteDiv.innerText.trim();
     const updatedStatus = modalStatus.value;
@@ -1549,76 +1539,40 @@ function toggleEditTask() {
       return;
     }
 
-    // 🔥 4. Sửa đúng task
-    window.tasks[currentDetailIndex].task = updatedTask;
-    window.tasks[currentDetailIndex].note = updatedNote;
-    window.tasks[currentDetailIndex].status = updatedStatus;
+    // Cập nhật đúng công việc hiện tại
+    tasks[currentDetailIndex].task = updatedTask;
+    tasks[currentDetailIndex].note = updatedNote;
+    tasks[currentDetailIndex].status = updatedStatus;
 
-    // 🔥 5. Lưu lại
-    localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
-
-    // 🔄 6. Reload tasks sau lưu
-    window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-    // 🔄 7. Render lại UI
+    saveToLocalStorage();
     filterTasks();
     showDetails(currentDetailIndex);
 
-    // Tắt chế độ edit
     editSaveBtn.textContent = "Sửa";
     isEditing = false;
+
+    // Đóng khóa chỉnh sửa
     taskDiv.contentEditable = "false";
     noteDiv.contentEditable = "false";
     taskDiv.style.backgroundColor = "#e0e0e0";
     noteDiv.style.backgroundColor = "#e0e0e0";
     modalStatus.disabled = true;
-
-    showToast("Đã cập nhật công việc!");
   }
 }
-
   // xóa chi tiết
   function openDeleteConfirmation() {
-  document.getElementById("confirmDeleteModal").style.display = "block";
-}
-
-function confirmDelete() {
-  const user = window.currentUser || localStorage.getItem("currentUser");
-
-  // 1️⃣ Load lại tasks mới nhất từ local
-  const tasksLocal = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-  // 2️⃣ Lấy đúng task theo chỉ số đang xem ở modal
-  const task = window.tasks[currentDetailIndex];
-  if (!task) {
-    showToast("❌ Không tìm thấy công việc để xóa!");
-    return;
+    document.getElementById("confirmDeleteModal").style.display = "block";
   }
 
-  const idToDelete = task.id; // 🔥 XÓA THEO ID — CHUẨN NHẤT
-
-  // 3️⃣ Xóa trong bản local theo ID
-  const newList = tasksLocal.filter(t => t.id !== idToDelete);
-
-  // 4️⃣ Lưu lại
-  localStorage.setItem(`tasks_${user}`, JSON.stringify(newList));
-
-  // 5️⃣ Cập nhật lại danh sách global
-  window.tasks = newList;
-
-  // 6️⃣ Render UI lại
-  if (typeof filterTasks === "function") filterTasks();
-
-  // 7️⃣ Đóng modal
-  closeModal("detailModal");
-  closeModal("confirmDeleteModal");
-
-  showToast("🗑️ Đã xoá công việc!");
-
-  currentDetailIndex = -1;
-}
-
-
+  function confirmDelete() {
+    tasks.splice(currentDetailIndex, 1);
+    saveToLocalStorage();
+    filterTasks();
+    closeModal("detailModal");
+    closeModal("confirmDeleteModal");
+    showToast("Đã xoá công việc!");
+    if (currentDetailIndex === -1) return;
+  }
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
