@@ -1525,9 +1525,27 @@ function toggleEditTask() {
   const noteDiv = document.getElementById("modalNote");
   const modalStatus = document.getElementById("modalStatus");
   const editSaveBtn = document.getElementById("editSaveBtn");
+  
+  // Chặn lỗi undefined khi index bị lệch hoặc task bị xoá
+if (!tasks[currentDetailIndex]) {
+    showToast("Không tìm thấy công việc để sửa! Vui lòng nhấn F5!");
+    return;
+}
+
+// Tìm lại index thật dựa trên ID
+const taskObj = tasks[currentDetailIndex];
+const realIndex = window.tasks.findIndex(t => t.id === taskObj.id);
+
+if (realIndex === -1) {
+    showToast("Không tìm thấy công việc để sửa!");
+    return;
+}
+
+// Gán lại index thật
+currentDetailIndex = realIndex;
+
 
   if (!isEditing) {
-    // Bật chế độ chỉnh sửa
     taskDiv.contentEditable = "true";
     noteDiv.contentEditable = "true";
     taskDiv.style.backgroundColor = "#fff";
@@ -1537,7 +1555,6 @@ function toggleEditTask() {
     editSaveBtn.textContent = "Lưu";
     isEditing = true;
   } else {
-    // Lưu thay đổi
     const updatedTask = taskDiv.innerText.trim();
     const updatedNote = noteDiv.innerText.trim();
     const updatedStatus = modalStatus.value;
@@ -1547,19 +1564,25 @@ function toggleEditTask() {
       return;
     }
 
-    // Cập nhật đúng công việc hiện tại
-    tasks[currentDetailIndex].task = updatedTask;
-    tasks[currentDetailIndex].note = updatedNote;
-    tasks[currentDetailIndex].status = updatedStatus;
+    
+
+    // Cập nhật chính xác task
+    tasks[realIndex].task = updatedTask;
+    tasks[realIndex].note = updatedNote;
+    tasks[realIndex].status = updatedStatus;
+
+    // Cập nhật lại index cho modal dùng
+    currentDetailIndex = realIndex;
 
     saveToLocalStorage();
     filterTasks();
+
+    // Mở lại modal đúng task
     showDetails(currentDetailIndex);
 
     editSaveBtn.textContent = "Sửa";
     isEditing = false;
 
-    // Đóng khóa chỉnh sửa
     taskDiv.contentEditable = "false";
     noteDiv.contentEditable = "false";
     taskDiv.style.backgroundColor = "#e0e0e0";
@@ -1567,6 +1590,7 @@ function toggleEditTask() {
     modalStatus.disabled = true;
   }
 }
+
   // xóa chi tiết
   function openDeleteConfirmation() {
     document.getElementById("confirmDeleteModal").style.display = "block";
