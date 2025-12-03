@@ -1107,7 +1107,8 @@ function filterTasks() {
     `;
 
     // Tìm index thực của task trong window.tasks (an toàn hơn indexOf khi objects là cùng tham chiếu)
-    const realIndex = window.tasks.indexOf(taskObj);
+    const realIndex = window.tasks.findIndex(t => t.id === taskObj.id);
+
 
     row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
       e.preventDefault();
@@ -1320,15 +1321,21 @@ function isLocalStorageFull(data) {
   function showDetails(index) {
   const user = window.currentUser || localStorage.getItem("currentUser");
 
-  // 🔥 NEW: luôn load dữ liệu mới nhất
+  // Load lại dữ liệu mới nhất
   window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
+  // Nếu index vượt mảng (do sync làm thay đổi) thì thoát
+  if (index < 0 || index >= window.tasks.length) {
+    showToast("Không tìm thấy công việc!");
+    return;
+  }
+
   currentDetailIndex = index;
-  const task = window.tasks[index]; // lấy bản mới 100%
+  const task = window.tasks[index];
 
   document.getElementById("modalStt").innerText = index + 1;
-  document.getElementById("modalTask").innerText = task.task;
-  document.getElementById("modalNote").innerText = task.note;
+  document.getElementById("modalTask").innerText = task.task || "";
+  document.getElementById("modalNote").innerText = task.note || "";
   document.getElementById("modalDate").value = task.date || "";
 
   const modalStatus = document.getElementById("modalStatus");
@@ -1336,7 +1343,7 @@ function isLocalStorageFull(data) {
   const validStatuses = ["chưa làm", "đang làm", "hoàn thành"];
   modalStatus.value = validStatuses.includes(status) ? capitalize(status) : "Chưa làm";
 
-  // reset trạng thái edit
+  // reset edit mode
   document.getElementById("modalTask").contentEditable = "false";
   document.getElementById("modalNote").contentEditable = "false";
   modalStatus.disabled = true;
@@ -1346,6 +1353,7 @@ function isLocalStorageFull(data) {
 
   document.getElementById("detailModal").style.display = "block";
 }
+
 
 
 // Hàm hỗ trợ viết hoa chữ cái đầu
