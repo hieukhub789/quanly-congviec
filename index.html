@@ -1573,14 +1573,23 @@ function toggleEditTask() {
   }
 
   function confirmDelete() {
-    tasks.splice(currentDetailIndex, 1);
-    saveToLocalStorage();
-    filterTasks();
-    closeModal("detailModal");
-    closeModal("confirmDeleteModal");
-    showToast("Đã xoá công việc!");
-    if (currentDetailIndex === -1) return;
+  // ⭐ Kiểm tra index trước khi xoá (tránh splice(-1,1))
+  if (currentDetailIndex < 0 || currentDetailIndex >= tasks.length) {
+    showToast("Không tìm thấy công việc để xoá!");
+    return;
   }
+
+  // ❌ Xóa đúng task theo index
+  tasks.splice(currentDetailIndex, 1);
+
+  saveToLocalStorage();
+  filterTasks();
+
+  closeModal("detailModal");
+  closeModal("confirmDeleteModal");
+  showToast("Đã xoá công việc!");
+}
+
 
   // function closeModal(id) {
   //   document.getElementById(id).style.display = "none";
