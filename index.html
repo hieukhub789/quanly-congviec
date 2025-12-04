@@ -1111,13 +1111,14 @@ function filterTasks() {
 
 
     row.querySelector("td:nth-child(2)").oncontextmenu = (e) => {
-      e.preventDefault();
-      if (typeof togglePin === "function") togglePin(realIndex);
-    };
+  e.preventDefault();
+  if (typeof togglePin === "function") togglePin(taskObj.id);
+};
+
 
     row.onclick = (e) => {
       if (e.target.tagName.toLowerCase() === "button") return;
-      if (typeof showDetails === "function") showDetails(realIndex);
+      if (typeof showDetails === "function") showDetails(taskObj.id);
     };
 
     tableBody.appendChild(row);
@@ -1155,11 +1156,30 @@ function filterTasks() {
 }
 
 
-function togglePin(index) {
-  tasks[index].pinned = !tasks[index].pinned;
-  saveToLocalStorage();
+function togglePin(taskId) {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+
+  // Luôn load dữ liệu mới nhất
+  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  // Tìm index thật theo ID
+  const index = window.tasks.findIndex(t => t.id === taskId);
+
+  if (index === -1) {
+    showToast("Không tìm thấy công việc để ghim!");
+    return;
+  }
+
+  // Toggle pinned
+  window.tasks[index].pinned = !window.tasks[index].pinned;
+
+  // Lưu lại Local Storage
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+
+  // Render lại bảng
   filterTasks();
 }
+
 function isLocalStorageFull(data) {
   try {
     // thử lưu dữ liệu tạm
@@ -1176,20 +1196,17 @@ function isLocalStorageFull(data) {
   function addTask() {
   const user = window.currentUser || localStorage.getItem("currentUser") || "default";
 
+  // Load mới 100% trước khi thêm
+  let taskList = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
   const taskText = document.getElementById("taskInput").value.trim();
   const noteText = document.getElementById("noteInput").value.trim();
-
-  if (isStorageFull) {
-    showToast("Không thể thêm vì bộ nhớ đã đầy.");
-    return;
-  }
 
   if (taskText === "") {
     alert("Vui lòng nhập công việc!");
     return;
   }
 
-  // 🆕 TẠO ID CHUẨN CHO TASK
   const newTask = {
     id: "task_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8),
     task: taskText,
@@ -1199,28 +1216,16 @@ function isLocalStorageFull(data) {
     pinned: false
   };
 
-  // Kiểm tra dung lượng trước khi thêm
-  const tempData = JSON.stringify([newTask, ...tasks]);
-  if (isLocalStorageFull(tempData)) {
-    showToast("Bộ nhớ gần đầy! Không thể thêm công việc.");
-    disableAddButton();
-    return;
-  }
+  // Thêm vào đầu mảng
+  taskList.unshift(newTask);
 
-  // 🆕 Thêm vào đầu danh sách
-  tasks.unshift(newTask);
+  // Lưu lại
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(taskList));
 
-  // 🆕 Lưu đúng user
-  localStorage.setItem(`tasks_${user}`, JSON.stringify(tasks));
+  // Cập nhật global
+  window.tasks = taskList;
 
-  // 🆕 Đánh dấu thay đổi để auto sync
-  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
-
-  // 🆕 Load lại biến global từ local (cho UI dùng bản mới)
-  window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
-
-  // 🆕 Render lại UI (gọi đúng 1 lần)
-  if (typeof window.filterTasks === "function") window.filterTasks();
+  filterTasks();
 
   // Reset input
   document.getElementById("taskInput").value = "";
@@ -1318,19 +1323,24 @@ function isLocalStorageFull(data) {
 
 
 
-  function showDetails(index) {
+ function showDetails(taskId) {
   const user = window.currentUser || localStorage.getItem("currentUser");
 
   // Load lại dữ liệu mới nhất
   window.tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-  // Nếu index vượt mảng (do sync làm thay đổi) thì thoát
-  if (index < 0 || index >= window.tasks.length) {
+  // Tìm index thật của task theo ID
+  const index = window.tasks.findIndex(t => t.id === taskId);
+
+  if (index === -1) {
     showToast("Không tìm thấy công việc!");
     return;
   }
 
-  currentDetailIndex = index;
+  // Lưu ID để sửa/xoá
+  currentDetailId = taskId;
+  currentDetailIndex = index; // vẫn giữ để không phá code cũ
+
   const task = window.tasks[index];
 
   document.getElementById("modalStt").innerText = index + 1;
@@ -1353,6 +1363,7 @@ function isLocalStorageFull(data) {
 
   document.getElementById("detailModal").style.display = "block";
 }
+
 
 
 
@@ -1525,33 +1536,13 @@ function toggleEditTask() {
   const noteDiv = document.getElementById("modalNote");
   const modalStatus = document.getElementById("modalStatus");
   const editSaveBtn = document.getElementById("editSaveBtn");
-  
-  // Chặn lỗi undefined khi index bị lệch hoặc task bị xoá
-if (!tasks[currentDetailIndex]) {
-    showToast("Không tìm thấy công việc để sửa! Vui lòng nhấn F5!");
-    return;
-}
-
-// Tìm lại index thật dựa trên ID
-const taskObj = tasks[currentDetailIndex];
-const realIndex = window.tasks.findIndex(t => t.id === taskObj.id);
-
-if (realIndex === -1) {
-    showToast("Không tìm thấy công việc để sửa!");
-    return;
-}
-
-// Gán lại index thật
-currentDetailIndex = realIndex;
-
 
   if (!isEditing) {
     taskDiv.contentEditable = "true";
     noteDiv.contentEditable = "true";
+    modalStatus.disabled = false;
     taskDiv.style.backgroundColor = "#fff";
     noteDiv.style.backgroundColor = "#fff";
-    modalStatus.disabled = false;
-
     editSaveBtn.textContent = "Lưu";
     isEditing = true;
   } else {
@@ -1564,32 +1555,41 @@ currentDetailIndex = realIndex;
       return;
     }
 
-    
+    const user = window.currentUser || localStorage.getItem("currentUser");
 
-    // Cập nhật chính xác task
-    tasks[realIndex].task = updatedTask;
-    tasks[realIndex].note = updatedNote;
-    tasks[realIndex].status = updatedStatus;
+    // Load lại đúng dữ liệu thật
+    let taskList = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-    // Cập nhật lại index cho modal dùng
-    currentDetailIndex = realIndex;
+    // Tìm theo ID (KHÔNG BAO GIỜ bị lệch)
+    const realIndex = taskList.findIndex(t => t.id === currentDetailId);
 
-    saveToLocalStorage();
+    if (realIndex === -1) {
+      showToast("Không tìm thấy công việc để sửa!");
+      return;
+    }
+
+    // Update đúng task
+    taskList[realIndex].task = updatedTask;
+    taskList[realIndex].note = updatedNote;
+    taskList[realIndex].status = updatedStatus;
+
+    // Lưu lại
+    localStorage.setItem(`tasks_${user}`, JSON.stringify(taskList));
+
+    // Cập nhật global
+    window.tasks = taskList;
+
     filterTasks();
-
-    // Mở lại modal đúng task
-    showDetails(currentDetailIndex);
 
     editSaveBtn.textContent = "Sửa";
     isEditing = false;
 
     taskDiv.contentEditable = "false";
     noteDiv.contentEditable = "false";
-    taskDiv.style.backgroundColor = "#e0e0e0";
-    noteDiv.style.backgroundColor = "#e0e0e0";
     modalStatus.disabled = true;
   }
 }
+
 
   // xóa chi tiết
   function openDeleteConfirmation() {
@@ -1597,22 +1597,39 @@ currentDetailIndex = realIndex;
   }
 
   function confirmDelete() {
-  // ⭐ Kiểm tra index trước khi xoá (tránh splice(-1,1))
-  if (currentDetailIndex < 0 || currentDetailIndex >= tasks.length) {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  
+  // Load dữ liệu mới nhất (tránh dùng tasks global cũ)
+  let taskList = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
+  // Tìm index thật theo ID
+  const realIndex = taskList.findIndex(t => t.id === currentDetailId);
+
+  if (realIndex === -1) {
     showToast("Không tìm thấy công việc để xoá!");
     return;
   }
 
-  // ❌ Xóa đúng task theo index
-  tasks.splice(currentDetailIndex, 1);
+  // Xóa đúng task
+  taskList.splice(realIndex, 1);
 
-  saveToLocalStorage();
+  // Lưu lại vào localStorage
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(taskList));
+
+  // Cập nhật biến global
+  window.tasks = taskList;
+
+  // Render lại UI
   filterTasks();
 
+  // Đóng modal
   closeModal("detailModal");
   closeModal("confirmDeleteModal");
+
   showToast("Đã xoá công việc!");
 }
+
+
 
 
   // function closeModal(id) {
