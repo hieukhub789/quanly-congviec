@@ -1476,31 +1476,38 @@ function showExportModal() {
     }
 
     function clearAllTasks() {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+
+  // 🔥 Load dữ liệu mới nhất từ localStorage
+  tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+
   if (tasks.length === 0) {
     showToast("Không có công việc nào để xóa.");
-    closeModal('confirmClearModal')
+    closeModal('confirmClearModal');
     return;
   }
 
-  // Tạo file backup trước khi xóa
+  // 🧩 Backup đúng dữ liệu thật
   const backupBlob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(backupBlob);
   link.download = `backup_cong_viec_${new Date().toLocaleDateString("vi-VN").replace(/\//g, "-")}.json`;
   link.click();
 
-  // Xóa toàn bộ
+  // ❌ Xóa toàn bộ
   tasks = [];
-  saveToLocalStorage();
+
+  // 🔥 Lưu đúng user
+  localStorage.setItem(`tasks_${user}`, JSON.stringify(tasks));
+
+  // 🔄 cập nhật biến global
+  window.tasks = tasks;
+
   closeModal('confirmClearModal');
   filterTasks();
 
   showToast("Đã xóa toàn bộ công việc! File backup đã được tải về.");
 }
-
-   
-
-
   function showToast(message) {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
