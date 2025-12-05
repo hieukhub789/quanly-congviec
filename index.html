@@ -1357,6 +1357,9 @@ function isLocalStorageFull(data) {
   document.getElementById("modalTask").contentEditable = "false";
   document.getElementById("modalNote").contentEditable = "false";
   modalStatus.disabled = true;
+  // doi mau nen
+  document.getElementById("modalTask").style.backgroundColor = "#e0e0e0";
+  document.getElementById("modalNote").style.backgroundColor = "#e0e0e0";
 
   document.getElementById("editSaveBtn").textContent = "Sửa";
   isEditing = false;
