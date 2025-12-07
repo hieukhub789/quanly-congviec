@@ -2110,38 +2110,88 @@ function addRepairRow() {
   const chiphi = document.getElementById("chiphiInput").value.trim();
 
   const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
-  if (!phutung || !diadiem || !thoigian || !chiphi)
-    return alert("Vui lòng nhập đầy đủ thông tin!");
-  if (!dateRegex.test(thoigian))
-    return alert("Ngày sai định dạng dd/mm/yyyy!");
 
-  const parsedChiPhi = parseInt(chiphi.replace(/\./g, ""));
+  if (!phutung || !diadiem || !thoigian || !chiphi) {
+    alert("Vui lòng nhập đầy đủ thông tin!");
+    return;
+  }
+  if (!dateRegex.test(thoigian)) {
+    alert("Ngày sai định dạng dd/mm/yyyy!");
+    return;
+  }
 
+  const parsedChiPhi = parseInt(chiphi.replace(/\./g, ""), 10);
+
+  // 🔥 Đọc dữ liệu chuẩn từ local (KHÔNG dùng window.repairs)
+  let repairList = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
+
+  /* ===========================
+        ✏️   SỬA DỮ LIỆU
+     =========================== */
   if (editingRepairIndex >= 0) {
-    repairs[editingRepairIndex] = {
+
+    // 🔥 LẤY ID CHUẨN TỪ modal
+    const editId = currentRepairId;  // <--- PHẢI DÙNG ID CHUẨN
+
+    // 🔥 Tìm index thật theo ID (KHÔNG BAO GIỜ lệch)
+    const realIndex = repairList.findIndex(r => r.id === editId);
+
+    if (realIndex === -1) {
+      showToast("Không tìm thấy bản ghi để sửa!");
+      return;
+    }
+
+    repairList[realIndex] = {
+      ...repairList[realIndex],
       phutung,
       diadiem,
       thoigian,
       chiphi: parsedChiPhi,
+      lastModified: Date.now()
     };
-    showToast("✏️ Đã sửa thông tin!");
+
     editingRepairIndex = -1;
+    showToast("✏️ Đã sửa thông tin!");
+
   } else {
-    repairs.unshift({ phutung, diadiem, thoigian, chiphi: parsedChiPhi });
+    /* ===========================
+           ➕ THÊM DỮ LIỆU
+       =========================== */
+
+    const newItem = {
+      id: 'repair_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+      phutung,
+      diadiem,
+      thoigian,
+      chiphi: parsedChiPhi,
+      lastModified: Date.now()
+    };
+
+    repairList.unshift(newItem);
+
     showToast("✅ Đã thêm mới thông tin!");
   }
 
-  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+  /* ===========================
+        💾 LƯU & CẬP NHẬT GLOBAL
+     =========================== */
+
+  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairList));
+  window.repairs = repairList;
+
+  // 🔥 BÁO CHO FIREBASE AUTO SYNC
   if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
 
-  repairPage = 1;
-  renderRepairTable();
-
+  // Reset form
   document.getElementById("phutungInput").value = "";
   document.getElementById("diadiemInput").value = "";
   document.getElementById("thoigianInput").value = "";
   document.getElementById("chiphiInput").value = "";
+
+  // Render UI
+  if (typeof renderRepairTable === "function") renderRepairTable();
 }
+
 
 // =============================
 // LOAD REPAIRS CHO USER
@@ -2194,32 +2244,31 @@ function renderRepairTable() {
   const paginatedRepairs = filteredRepairs.slice(startIndex, startIndex + repairRowsPerPage);
 
   paginatedRepairs.forEach((item, displayIndex) => {
-    const row = document.createElement("tr");
+  const row = document.createElement("tr");
+  // gắn id lên dataset để debug dễ
+  row.dataset.id = item.id;
 
-    const originalIndex = repairs.findIndex(r =>
-      r.phutung === item.phutung &&
-      r.diadiem === item.diadiem &&
-      r.thoigian === item.thoigian &&
-      r.chiphi === item.chiphi
-    );
-
-    row.addEventListener("contextmenu", e => {
-      e.preventDefault();
-      editRepair(originalIndex);
-    });
-
-    row.addEventListener("dblclick", () => confirmDelete1(originalIndex));
-
-    row.innerHTML = `
-      <td>${startIndex + displayIndex + 1}</td>
-      <td>${item.phutung}</td>
-      <td>${item.diadiem}</td>
-      <td>${item.thoigian}</td>
-      <td>${item.chiphi.toLocaleString("vi-VN")} VND</td>
-    `;
-
-    tbody.appendChild(row);
+  row.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    // gọi edit bằng id
+    if (typeof editRepair === "function") editRepair(item.id);
   });
+
+  row.addEventListener("dblclick", () => {
+    if (typeof confirmDelete1 === "function") confirmDelete1(item.id);
+  });
+
+  row.innerHTML = `
+    <td>${startIndex + displayIndex + 1}</td>
+    <td>${item.phutung}</td>
+    <td>${item.diadiem}</td>
+    <td>${item.thoigian}</td>
+    <td>${item.chiphi.toLocaleString("vi-VN")} VND</td>
+  `;
+
+  tbody.appendChild(row);
+});
+
 
   document.getElementById("totalCost").textContent = `Tổng chi phí: ${total.toLocaleString("vi-VN")} VND`;
   renderRepairPagination(filteredRepairs.length);
@@ -2263,38 +2312,60 @@ function renderRepairPagination(totalItems) {
 // =============================
 //  DELETE + EDIT
 // =============================
-function confirmDelete1(index) {
-  const username =
-    window.currentUser ||
-    localStorage.getItem("currentUser") ||
-    "default";
+function confirmDelete1(id) {
+  const username = window.currentUser || localStorage.getItem("currentUser") || "default";
+  repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
 
-  const item = repairs[index];
+  const idx = repairs.findIndex(r => r.id === id);
+  if (idx === -1) {
+    showToast("Không tìm thấy dòng để xoá!");
+    return;
+  }
+
+  const item = repairs[idx];
   const message = `Bạn có chắc muốn xoá dòng sau?\n- Phụ tùng: ${item.phutung}\n- Chi phí: ${item.chiphi.toLocaleString("vi-VN")} VND`;
 
   showConfirmModal(message, () => {
-    repairs.splice(index, 1);
-    showToast("🗑️ Đã xoá phụ tùng sửa chữa");
-
+    repairs.splice(idx, 1);
     localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
     if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
-
     if ((repairPage - 1) * repairRowsPerPage >= repairs.length) repairPage = Math.max(1, repairPage - 1);
     renderRepairTable();
+    showToast("🗑️ Đã xoá phụ tùng sửa chữa");
   });
 }
 
-function editRepair(index) {
-  const item = repairs[index];
-  currentEditingIndex = index;
 
-  document.getElementById("editPhutungInput").value = item.phutung;
-  document.getElementById("editDiadiemInput").value = item.diadiem;
-  document.getElementById("editThoigianInput").value = item.thoigian;
-  document.getElementById("editChiphiInput").value = item.chiphi.toLocaleString("vi-VN");
+// === EDIT THEO ID (chuẩn, không lệch index) ===
+function editRepair(repairId) {
+  const username = window.currentUser || localStorage.getItem("currentUser") || "default";
 
+  // Load lại từ LocalStorage để tránh lệch dữ liệu
+  repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
+
+  // Tìm index thật bằng ID
+  const idx = repairs.findIndex(r => r.id === repairId);
+
+  if (idx === -1) {
+    showToast("Không tìm thấy dòng để sửa!");
+    return;
+  }
+
+  currentEditingIndex = idx;  // vẫn dùng index để lưu
+  currentEditingId = repairId;
+
+  const item = repairs[idx];
+
+  // Gán dữ liệu vào modal
+  document.getElementById("editPhutungInput").value = item.phutung || "";
+  document.getElementById("editDiadiemInput").value = item.diadiem || "";
+  document.getElementById("editThoigianInput").value = item.thoigian || "";
+  document.getElementById("editChiphiInput").value = item.chiphi?.toLocaleString("vi-VN") || "";
+
+  // Hiện modal
   showEditRepairModal();
 }
+
 
 function showEditRepairModal() {
   const modal = document.getElementById("editRepairModal");
@@ -2302,28 +2373,49 @@ function showEditRepairModal() {
 }
 
 function saveEditedRepair() {
-  const pt = document.getElementById("editPhutungInput").value.trim();
-  const dd = document.getElementById("editDiadiemInput").value.trim();
-  const tg = document.getElementById("editThoigianInput").value.trim();
-  const cp = document.getElementById("editChiphiInput").value.trim();
+  const username = window.currentUser || localStorage.getItem("currentUser") || "default";
+  repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
 
-  const parsedCost = parseInt(cp.replace(/\./g, ""));
-  const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
+  if (currentEditingId == null) {
+    showToast("Không có mục nào để lưu!");
+    return;
+  }
 
-  if (!pt || !dd || !tg || !cp) return alert("Vui lòng điền đầy đủ thông tin!");
-  if (!dateRegex.test(tg)) return alert("Sai định dạng ngày. Dùng dd/mm/yyyy.");
+  // Tìm đúng index theo ID
+  const idx = repairs.findIndex(r => r.id === currentEditingId);
+  if (idx === -1) {
+    showToast("Không tìm thấy mục cần lưu!");
+    return;
+  }
 
-  repairs[currentEditingIndex] = {
-    phutung: pt,
-    diadiem: dd,
-    thoigian: tg,
-    chiphi: parsedCost,
+  const phutung = document.getElementById("editPhutungInput").value.trim();
+  const diadiem = document.getElementById("editDiadiemInput").value.trim();
+  const thoigian = document.getElementById("editThoigianInput").value.trim();
+  const chiphi = parseInt((document.getElementById("editChiphiInput").value || "").replace(/\D/g, "")) || 0;
+
+  repairs[idx] = {
+    ...repairs[idx],
+    phutung,
+    diadiem,
+    thoigian,
+    chiphi,
+    lastModified: Date.now()
   };
 
-  saveRepairs();
+  // Lưu xuống local đúng user
+  localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+
+  // ⭐ BẮT BUỘC – báo cho Firestore rằng dữ liệu đã thay đổi
+  if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
+
+  showToast("💾 Đã lưu chỉnh sửa!");
   renderRepairTable();
-  closeEditRepairModal();
+  closeModal("editRepairModal");
 }
+
+
+
+
 // Import JSON repairs
 function handleRepairJsonImport(event) {
   const file = event.target.files[0];
@@ -2394,6 +2486,24 @@ function saveRepairs() {
   localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
   if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
 }
+function migrateRepairId(username) {
+  let repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
+  let changed = false;
+
+  repairs = repairs.map(r => {
+    if (!r.id) {
+      r.id = "repair_" + Date.now() + "_" + Math.random().toString(36).substring(2,8);
+      changed = true;
+    }
+    return r;
+  });
+
+  if (changed) {
+    localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
+    console.log("✔ Đã thêm ID cho repairs cũ");
+  }
+}
+
 
 function downloadBackupFile(data, filename = "repair-backup.json") {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
