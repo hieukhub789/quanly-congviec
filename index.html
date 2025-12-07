@@ -2416,7 +2416,7 @@ function saveEditedRepair() {
 
 
 
-// Import JSON repairs
+// Import JSON repairs (phiên bản AN TOÀN: auto-gán id + lastModified cho mục thiếu)
 function handleRepairJsonImport(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -2433,22 +2433,50 @@ function handleRepairJsonImport(event) {
       }
 
       // Lấy user hiện tại
-      const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+      const username = window.currentUser || localStorage.getItem("currentUser") || "default";
 
-      // Lưu vào localStorage theo từng user
-      localStorage.setItem(`repairs_${username}`, JSON.stringify(jsonData));
+      // Chuẩn hoá: đảm bảo mỗi item có id + lastModified + chiphi là số
+      let changed = false;
+      const normalized = jsonData.map(item => {
+        const copy = Object.assign({}, item);
+
+        if (!copy.id) {
+          copy.id = 'repair_' + Date.now() + '_' + Math.random().toString(36).substring(2,8);
+          changed = true;
+        }
+
+        if (!copy.lastModified) {
+          copy.lastModified = Date.now();
+          changed = true;
+        }
+
+        // chuẩn hoá chiphi (nếu là chuỗi có dấu chấm)
+        if (typeof copy.chiphi === "string") {
+          const num = parseInt(copy.chiphi.replace(/\D/g, ""), 10);
+          copy.chiphi = isNaN(num) ? 0 : num;
+          changed = true;
+        } else if (typeof copy.chiphi !== "number") {
+          copy.chiphi = 0;
+          changed = true;
+        }
+
+        return copy;
+      });
+
+      // LƯU trực tiếp (ghi đè) vào localStorage như bạn muốn
+      localStorage.setItem(`repairs_${username}`, JSON.stringify(normalized));
 
       // Cập nhật biến repairs đang dùng trong UI
-      window.repairs = jsonData;
+      window.repairs = normalized;
+
+      // Báo thay đổi để auto-sync (nếu bạn có cơ chế này)
+      if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
 
       // Render lại bảng
-      if (typeof renderRepairTable === "function") {
-        renderRepairTable();
-      }
+      if (typeof renderRepairTable === "function") renderRepairTable();
 
-      showToast("📥 Import danh sách sửa chữa thành công!");
-
-      console.log("📥 IMPORTED REPAIRS:", jsonData);
+      showToast("📥 Import danh sách sửa chữa thành công! ID đã được gán cho mục thiếu.");
+      console.log("📥 IMPORTED REPAIRS (normalized):", normalized);
     } catch (err) {
       console.error("Import JSON error:", err);
       alert("❌ File không đúng định dạng JSON!");
@@ -2457,7 +2485,6 @@ function handleRepairJsonImport(event) {
 
   reader.readAsText(file);
 }
-
 
 function closeEditRepairModal() {
   document.getElementById("editRepairModal").style.display = "none";
