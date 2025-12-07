@@ -2589,10 +2589,14 @@ document.getElementById("confirmNo").onclick = function () {
 <script type="module">
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 🧠 Lưu trạng thái chỉnh sửa
+// =======================
+//  BIẾN TRẠNG THÁI
+// =======================
 window.cheDoSuaGhiChu = false;
 
-// 🧩 Hàm mở modal ghi chú
+// =======================
+//  HÀM MỞ MODAL GHI CHÚ
+// =======================
 window.moModalGhiChu = async function () {
   const user = window.currentUser || localStorage.getItem("currentUser") || "all";
   const textarea = document.getElementById("noiDungGhiChu");
@@ -2602,27 +2606,43 @@ window.moModalGhiChu = async function () {
     return;
   }
 
-  // 🔹 Tải ghi chú từ local trước
-  const daLuu = localStorage.getItem(`ghiChu_${user}`) || "";
-  const thoiGianLuu = localStorage.getItem(`ghiChu_lastSaved_${user}`);
-  textarea.value = daLuu;
+  // --- Đọc local lưu dạng object {id, content, lastModified} ---
+  let noteData = null;
+  try {
+    noteData = JSON.parse(localStorage.getItem(`ghiChu_${user}`) || "null");
+  } catch {
+    // nếu lỡ lưu sai dạng (string) thì convert sang object
+    const old = localStorage.getItem(`ghiChu_${user}`);
+    noteData = {
+      id: "note_" + Date.now(),
+      content: old || "",
+      lastModified: Date.now()
+    };
+    localStorage.setItem(`ghiChu_${user}`, JSON.stringify(noteData));
+  }
+
+  textarea.value = noteData?.content || "";
   textarea.setAttribute("readonly", true);
   textarea.classList.add("readonly-field");
   cheDoSuaGhiChu = false;
   document.getElementById("btnSuaGhiChu").textContent = "✏️ Sửa";
-  document.getElementById("modalGhiChu").style.display = "flex";
-  capNhatThoiGianLuu(thoiGianLuu);
 
-  // 🔹 Thử đồng bộ từ Firebase (nếu có)
+  document.getElementById("modalGhiChu").style.display = "flex";
+  capNhatThoiGianLuu(noteData?.lastModified);
+
+  // --- Tải từ Cloud nếu có ---
   try {
     const ref = doc(window.db, "users", user);
     const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data();
-      const cloudNote = data.notes || "";
-      if (cloudNote !== daLuu) {
-        textarea.value = cloudNote;
-        localStorage.setItem(`ghiChu_${user}`, cloudNote);
+
+    if (snap.exists() && snap.data().note) {
+      const cloudNote = snap.data().note;
+
+      // Nếu cloud mới hơn thì cập nhật local
+      if (cloudNote.lastModified > (noteData?.lastModified || 0)) {
+        textarea.value = cloudNote.content;
+        localStorage.setItem(`ghiChu_${user}`, JSON.stringify(cloudNote));
+        capNhatThoiGianLuu(cloudNote.lastModified);
       }
     }
   } catch (err) {
@@ -2630,12 +2650,16 @@ window.moModalGhiChu = async function () {
   }
 };
 
-// 🧩 Đóng modal
+// =======================
+//  ĐÓNG MODAL
+// =======================
 window.dongModalGhiChu = function () {
   document.getElementById("modalGhiChu").style.display = "none";
 };
 
-// 🧩 Bật chế độ sửa hoặc lưu
+// =======================
+//  NÚT SỬA / LƯU GHI CHÚ
+// =======================
 window.batCheDoSuaGhiChu = async function () {
   const user = window.currentUser || localStorage.getItem("currentUser");
   const textarea = document.getElementById("noiDungGhiChu");
@@ -2646,57 +2670,86 @@ window.batCheDoSuaGhiChu = async function () {
   }
 
   if (!cheDoSuaGhiChu) {
-    // ✏️ Chuyển sang chế độ sửa
+    // ---- Bật chế độ sửa ----
     textarea.removeAttribute("readonly");
     textarea.classList.remove("readonly-field");
     textarea.focus();
+
     cheDoSuaGhiChu = true;
     document.getElementById("btnSuaGhiChu").textContent = "💾 Lưu";
-  } else {
-    // 💾 Lưu ghi chú vào local + Firebase
-    const noiDung = textarea.value.trim();
-    const thoiGianHienTai = new Date().toLocaleString("vi-VN");
-
-    localStorage.setItem(`ghiChu_${user}`, noiDung);
-    localStorage.setItem(`ghiChu_lastSaved_${user}`, thoiGianHienTai);
-    capNhatThoiGianLuu(thoiGianHienTai);
-
-    // 🔄 Đồng bộ lên Firestore
-    try {
-      await setDoc(doc(window.db, "users", user), { notes: noiDung }, { merge: true });
-      showToast("✅ Ghi chú đã được lưu & đồng bộ Cloud.");
-    } catch (err) {
-      console.error("Lỗi lưu ghi chú lên Firebase:", err);
-      showToast("⚠️ Lưu cục bộ thành công, nhưng chưa đồng bộ được Cloud!");
-    }
-
-    textarea.setAttribute("readonly", true);
-    textarea.classList.add("readonly-field");
-    cheDoSuaGhiChu = false;
-    document.getElementById("btnSuaGhiChu").textContent = "✏️ Sửa";
-
-    // Hiệu ứng highlight khi lưu
-    textarea.classList.add("highlight-save");
-    setTimeout(() => textarea.classList.remove("highlight-save"), 500);
+    return;
   }
+
+  // ---- Lưu ----
+  const noiDung = textarea.value.trim();
+  const now = Date.now();
+
+  let noteData = JSON.parse(localStorage.getItem(`ghiChu_${user}`) || "null");
+
+  if (!noteData || !noteData.id) {
+    noteData = {
+      id: "note_" + now,
+      content: noiDung,
+      lastModified: now
+    };
+  } else {
+    noteData.content = noiDung;
+    noteData.lastModified = now;
+  }
+
+  // Lưu local
+  localStorage.setItem(`ghiChu_${user}`, JSON.stringify(noteData));
+  capNhatThoiGianLuu(now);
+
+  // Lưu Firestore
+  try {
+    await setDoc(
+      doc(window.db, "users", user),
+      { note: noteData },
+      { merge: true }
+    );
+    showToast("✅ Ghi chú đã lưu & đồng bộ Cloud.");
+  } catch (err) {
+    console.error("Firebase Save Error:", err);
+    showToast("⚠ Lưu local OK nhưng Cloud lỗi!");
+  }
+
+  // Khóa lại
+  textarea.setAttribute("readonly", true);
+  textarea.classList.add("readonly-field");
+  cheDoSuaGhiChu = false;
+  document.getElementById("btnSuaGhiChu").textContent = "✏️ Sửa";
+
+  // Hiệu ứng lưu
+  textarea.classList.add("highlight-save");
+  setTimeout(() => textarea.classList.remove("highlight-save"), 500);
 };
 
-// 🧩 Cập nhật thời gian lưu hiển thị
-window.capNhatThoiGianLuu = function (thoiGian) {
+// =======================
+//  HIỂN THỊ THỜI GIAN LƯU
+// =======================
+window.capNhatThoiGianLuu = function (timestamp) {
   const lbl = document.getElementById("thoiGianLuu");
-  lbl.textContent = thoiGian
-    ? `🕒 Lần lưu gần nhất: ${thoiGian}`
-    : "🕒 Chưa có lần lưu nào";
+  if (!lbl) return;
+
+  if (!timestamp) {
+    lbl.textContent = "🕒 Chưa có lần lưu nào";
+    return;
+  }
+
+  const timeStr = new Date(parseInt(timestamp)).toLocaleString("vi-VN");
+  lbl.textContent = `🕒 Lần lưu gần nhất: ${timeStr}`;
 };
 
-// ⌨️ Đóng modal khi bấm ESC
-document.addEventListener("keydown", (event) => {
-  const modal = document.getElementById("modalGhiChu");
-  if (event.key === "Escape" && modal.style.display === "flex") {
-    dongModalGhiChu();
+// ESC đóng modal
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const modal = document.getElementById("modalGhiChu");
+    if (modal.style.display === "flex") dongModalGhiChu();
   }
 });
 </script>
+
 
 <!-- --- USER SWITCH SCRIPT: start --- -->
 <script>
