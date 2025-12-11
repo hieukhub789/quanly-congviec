@@ -3001,23 +3001,23 @@ function showSystemNotification(title, message, type = "info") {
     tinyToast("🔄 Đồng bộ Firebase...");
 
     try {
-      // Lấy danh sách user trong local
-      const users = [];
-      for (let i=0;i<localStorage.length;i++){
-        const key = localStorage.key(i);
-        if (key.startsWith("tasks_")) users.push(key.replace("tasks_",""));
-      }
-      const uniqUsers = Array.from(new Set(users));
 
+      /* 🔥🔥🔥 ĐIỂM SỬA QUAN TRỌNG NHẤT 🔥🔥🔥 */
+      const currentUser = window.currentUser || localStorage.getItem("currentUser");
+      if (!currentUser) {
+        console.warn("Không có user nào đang đăng nhập → Không sync");
+        syncInProgress = false;
+        return;
+      }
+      const uniqUsers = [currentUser];  // Chỉ sync đúng user đang dùng
+      /* ------------------------------------------------------------ */
 
       for (const username of uniqUsers){
 
         let tasks = JSON.parse(localStorage.getItem("tasks_" + username) || "[]");
         const repairs = JSON.parse(localStorage.getItem("repairs_" + username) || "[]");
 
-        /* ------------------------------------------------------------
-             ⭐ BỔ SUNG ID CHO TỪNG TASK (CHỈ LOCAL)
-           ------------------------------------------------------------ */
+        // ⭐ BỔ SUNG ID CHO TỪNG TASK (CHỈ LOCAL)
         tasks = tasks.map(task => {
           if (!task.id) {
             task.id = "task_" + Date.now() + "_" + Math.random().toString(36).substring(2,8);
@@ -3027,7 +3027,6 @@ function showSystemNotification(title, message, type = "info") {
 
         // lưu lại local sau khi thêm id
         localStorage.setItem("tasks_" + username, JSON.stringify(tasks));
-
 
         // xử lý notes
         const perUserNoteKey = `ghiChu_${username}`;
@@ -3050,7 +3049,6 @@ function showSystemNotification(title, message, type = "info") {
             finalNote = cloudData.notes;
           }
 
-          // payload
           const payload = {
             username,
             tasks,
@@ -3080,7 +3078,8 @@ function showSystemNotification(title, message, type = "info") {
     }
 
     syncInProgress = false;
-  }
+}
+
 
 
   window.addEventListener("online", tryAutoSync);
