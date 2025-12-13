@@ -1042,7 +1042,7 @@ function filterTasks() {
   // Lọc từ window.tasks (đã đồng bộ ở trên)
   const filteredTasks = (window.tasks || []).filter(taskObj => {
     const text = `${(taskObj.task || "").toLowerCase()} ${(taskObj.note || "").toLowerCase()}`;
-
+     
     const taskMatch = keywords.length === 0
       ? true
       : isAndSearch
@@ -1061,6 +1061,7 @@ function filterTasks() {
       if (startDate && taskDate < startDate) dateMatch = false;
       if (endDate && taskDate > endDate) dateMatch = false;
     }
+    if (taskObj.deleted) return false; 
 
     return taskMatch && statusMatch && dateMatch;
   });
@@ -1237,42 +1238,31 @@ function isLocalStorageFull(data) {
 
 
 
-  function deleteTask(index) {
+ async function deleteTask(index) {
   const user = window.currentUser || localStorage.getItem("currentUser");
-  if (!user || user === "all") {
-    showToast("❌ Không thể xóa trong chế độ 'Tất cả'!");
-    return;
-  }
-
+  if (!user || user === "all") return;
   if (!confirm("Bạn có chắc muốn xóa công việc này không?")) return;
 
-  // 🔹 Lấy danh sách hiện tại đúng user
-  const tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+  let tasks = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
+  const taskObj = tasks[index];
+  if (!taskObj) return;
 
-  if (!tasks[index]) {
-    showToast("⚠️ Không tìm thấy công việc để xóa!");
-    return;
-  }
+  // 🔥 ĐÁNH DẤU XOÁ
+  taskObj.deleted = true;
+  taskObj.deletedAt = Date.now();
 
-  // 🔹 Xóa task theo index
-  tasks.splice(index, 1);
-
-  // 🔹 Lưu lại local
+  // ✅ LƯU LOCAL (sync sẽ tự đẩy lên cloud)
   localStorage.setItem(`tasks_${user}`, JSON.stringify(tasks));
-
-  // 🔹 Cập nhật toàn cục và refresh UI
   window.tasks = tasks;
 
-  // 🔹 Đóng modal (nếu có)
-  const modal = document.getElementById("detailModal");
-  if (modal) modal.style.display = "none";
+  // ❌ KHÔNG setDoc riêng từng task
+  // ❌ KHÔNG ghi vào collection khác
 
-  // 🔁 Cập nhật lại danh sách
-  if (typeof window.filterTasks === "function") window.filterTasks();
-
-  // ✅ Thông báo
-  showToast("🗑️ Đã xóa công việc thành công!");
+  filterTasks();
+  showToast("🗑️ Đã xoá công việc!");
 }
+
+
 
 
 
@@ -1649,36 +1639,38 @@ function toggleEditTask() {
 
   function confirmDelete() {
   const user = window.currentUser || localStorage.getItem("currentUser");
-  
-  // Load dữ liệu mới nhất (tránh dùng tasks global cũ)
+  if (!user || user === "all") return;
+
+  // Load dữ liệu mới nhất
   let taskList = JSON.parse(localStorage.getItem(`tasks_${user}`) || "[]");
 
-  // Tìm index thật theo ID
+  // Tìm task theo ID
   const realIndex = taskList.findIndex(t => t.id === currentDetailId);
-
   if (realIndex === -1) {
     showToast("Không tìm thấy công việc để xoá!");
     return;
   }
 
-  // Xóa đúng task
-  taskList.splice(realIndex, 1);
+  const taskObj = taskList[realIndex];
 
-  // Lưu lại vào localStorage
+  // 🔥🔥🔥 SOFT DELETE – KHÔNG splice
+  taskObj.deleted = true;
+  taskObj.deletedAt = Date.now();
+
+  // Lưu local (auto trigger sync)
   localStorage.setItem(`tasks_${user}`, JSON.stringify(taskList));
-
-  // Cập nhật biến global
   window.tasks = taskList;
 
-  // Render lại UI
+  // Render lại UI (task sẽ biến mất do filter)
   filterTasks();
 
   // Đóng modal
   closeModal("detailModal");
   closeModal("confirmDeleteModal");
 
-  showToast("Đã xoá công việc!");
+  showToast("🗑️ Đã xoá công việc!");
 }
+
 
 
 
@@ -3136,7 +3128,11 @@ function showSystemNotification(title, message, type = "info") {
       // ============================================================
       cloudTasks.forEach(cloud => {
         const local = localMap.get(cloud.id);
-
+        if (cloud.deleted === true) {
+    localMap.delete(cloud.id); // xoá local nếu còn
+    changed = true;
+    return; // ❌ KHÔNG merge
+  }
         if (!local) {
           // 👉 LOCAL KHÔNG CÓ → THÊM MỚI
           merged.push(cloud);
@@ -3170,6 +3166,10 @@ function showSystemNotification(title, message, type = "info") {
       // 2) TASK CHỈ CÓ LOCAL (có thể do máy này tạo)
       // ============================================================
       localMap.forEach((localOnlyTask) => {
+        if (localOnlyTask.deleted === true) {
+        changed = true;
+        return; // ❌ bỏ task đã xoá
+        }
         merged.push(localOnlyTask); // giữ nguyên
       });
 
