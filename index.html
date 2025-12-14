@@ -708,7 +708,7 @@
     <button id="addBtn" onclick="addTask()">Thêm</button>
     <button id="exportBtn" onclick="showExportModal()">Xuất</button>
     <button id="clearBtn" onclick="showConfirmClearModal()">Xóa</button>
-    <button id="syncBtn" onclick="syncFromFirebase()" style="background-color:#8e44ad; color:white;">🔄 Đồng bộ từ Cloud</button>
+    <!-- <button id="syncBtn" onclick="syncFromFirebase()" style="background-color:#8e44ad; color:white;">🔄 Đồng bộ từ Cloud</button> -->
     <button onclick="openModal('addUserModal')"  style="background: linear-gradient(135deg, #5dade2, #85c1e9); color: #050101;font-weight: 600; ">👤➕ Người dùng</button>
     <button id="lockBtn" onclick="lockScreen()" style="background-color: orange;">Khóa</button>
     <button onclick="showWeatherModal()" style="background-color: #4ba3c7; color: white;">Thời tiết</button>
@@ -2627,47 +2627,80 @@ function saveToLocalStorage() {
 }
 
 // --- Chuyển người dùng ---
-function changeUser() {
+async function changeUser() {
   const select = document.getElementById("userSelect");
   if (!select) return;
 
+  // ===============================
+  // 1️⃣ SET USER (GIỮ NGUYÊN CỦA BẠN)
+  // ===============================
   currentUser = select.value;
+  window.currentUser = currentUser;
   localStorage.setItem("currentUser", currentUser);
-  // Reset về trang đầu (nếu có phân trang)
+
+  // Reset phân trang
   currentPage = 1;
-  // ✅ Gắn vào window để các file khác thấy
-  window.currentUser = select.value;
 
-  // Lưu vào localStorage
-  localStorage.setItem("currentUser", window.currentUser);
-  // Cập nhật hiển thị
-  filterTasks();
-  updateUIForUser();
+  // ===============================
+  // 2️⃣ NẾU LÀ ALL → CHỈ LOAD LOCAL
+  // ===============================
+  if (currentUser === "all") {
+    filterTasks();
+    updateUIForUser();
 
-  // 🔹 Cập nhật trạng thái nút "Thêm"
-  const addBtn = document.getElementById("addBtn"); // đúng id trong file của bạn
-  if (addBtn) {
-    const disable = currentUser === "all";
-    addBtn.disabled = disable;
-    addBtn.style.opacity = disable ? "0.6" : "1";
-    addBtn.style.cursor = disable ? "not-allowed" : "pointer";
+    // cập nhật nút
+    const addBtn = document.getElementById("addBtn");
+    if (addBtn) {
+      addBtn.disabled = true;
+      addBtn.style.opacity = "0.6";
+      addBtn.style.cursor = "not-allowed";
+    }
+
+    const clearBtn = document.getElementById("clearBtn");
+    if (clearBtn) clearBtn.disabled = true;
+
+    const importInput = document.getElementById("importJsonInput");
+    if (importInput) importInput.disabled = true;
+
+    showToast("Đã chuyển sang: Tất cả");
+    return;
   }
 
-  // 🔹 (Tùy chọn) cập nhật các nút khác
+  // ===============================
+  // 3️⃣ QUAN TRỌNG NHẤT:
+  //     GIỐNG HỆT BẤM NÚT SYNC
+  // ===============================
+  if (typeof window.syncFromFirebase === "function") {
+    await window.syncFromFirebase(); // 🔥 Y HỆT CLICK BUTTON
+  }
+
+  // ===============================
+  // 4️⃣ UPDATE UI SAU KHI SYNC
+  // ===============================
+  updateUIForUser();
+
+  // ===============================
+  // 5️⃣ CẬP NHẬT NÚT
+  // ===============================
+  const addBtn = document.getElementById("addBtn");
+  if (addBtn) {
+    addBtn.disabled = false;
+    addBtn.style.opacity = "1";
+    addBtn.style.cursor = "pointer";
+  }
+
   const clearBtn = document.getElementById("clearBtn");
-  if (clearBtn) clearBtn.disabled = currentUser === "all";
+  if (clearBtn) clearBtn.disabled = false;
+
   const importInput = document.getElementById("importJsonInput");
-  if (importInput) importInput.disabled = currentUser === "all";
+  if (importInput) importInput.disabled = false;
 
-  showToast(`Đã chuyển sang: ${currentUser === "all" ? "Tất cả" : currentUser}`);
-  loadUserTasks();
-  // 🔁 Tự động đồng bộ dữ liệu từ Firebase khi đổi user
-if (typeof window.syncFromFirebase === "function" && currentUser !== "all") {
-  window.syncFromFirebase();
+  // ===============================
+  // 6️⃣ THÔNG BÁO
+  // ===============================
+  showToast(`Đã chuyển sang: ${currentUser}`);
 }
 
-
-}
 
 
 // --- Bảo vệ khi ở chế độ tất cả ---
@@ -2745,57 +2778,37 @@ function loadUsers() {
 }
 
 // Khi đổi người dùng
-function changeUser() {
+window.changeUser = async function changeUser() {
   const select = document.getElementById("userSelect");
-  const value = select.value;
+  if (!select) return;
 
-  if (value === "__add_new__") {
-    // Nếu chọn "Thêm người dùng mới"
-    select.value = currentUser;
-    document.getElementById("addUserModal").style.display = "block";
-    document.getElementById("newUserName").value = "";
-    return;
-  }
+  const newUser = select.value;
 
-  currentUser = value;
-  localStorage.setItem("currentUser", currentUser);
+  // 1️⃣ set user
+  currentUser = newUser;
+  window.currentUser = newUser;
+  localStorage.setItem("currentUser", newUser);
 
-  // 🔹 Lấy dữ liệu đúng theo user
-  if (currentUser === "all") {
-    const users = JSON.parse(localStorage.getItem("users")) || [];
-    let allTasks = [];
-    users.forEach(u => {
-      if (u !== "all") {
-        const data = JSON.parse(localStorage.getItem(`tasks_${u}`) || "[]");
-        allTasks = allTasks.concat(data);
-      }
-    });
-    tasks = allTasks;
-  } else {
-    tasks = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
-  }
-
-  // Cập nhật giao diện danh sách
+  // 2️⃣ reset
   currentPage = 1;
+
+  // 3️⃣ load local trước
+  loadUserTasks();
+  filterTasks();
+  
+
+  // 4️⃣ SYNC GIỐNG HỆT NÚT 🔄
+  if (typeof window.syncFromFirebase === "function" && newUser !== "all") {
+    window.__preventAutoSync = true;
+    await window.syncFromFirebase();   // ← GIỐNG bấm nút
+    window.__preventAutoSync = false;
+  }
+
+  // 5️⃣ render lại
   filterTasks();
 
-  // 🔹 Cập nhật trạng thái các nút thao tác
-  const addBtn = document.getElementById("addBtn");
-  if (addBtn) {
-    const disable = currentUser === "all";
-    addBtn.disabled = disable;
-    addBtn.style.opacity = disable ? "0.6" : "1";
-    addBtn.style.cursor = disable ? "not-allowed" : "pointer";
-  }
-
-  const clearBtn = document.getElementById("clearBtn");
-  if (clearBtn) clearBtn.disabled = currentUser === "all";
-  const importInput = document.getElementById("importJsonInput");
-  if (importInput) importInput.disabled = currentUser === "all";
-
-  // 🔹 Hiển thị thông báo
-  showToast(`👤 Đã chuyển sang người dùng: ${currentUser === "all" ? "Tất cả" : currentUser}`);
-}
+  showToast(`Đã chuyển sang: ${newUser === "all" ? "Tất cả" : newUser}`);
+};
 
 
 // Thêm người dùng mới
