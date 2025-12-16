@@ -2151,16 +2151,37 @@ function addRepairRow() {
   const parsedChiPhi = parseInt(chiphi.replace(/\./g, ""));
 
   if (editingRepairIndex >= 0) {
-    repairs[editingRepairIndex] = {
-      phutung,
-      diadiem,
-      thoigian,
-      chiphi: parsedChiPhi,
-    };
-    showToast("✏️ Đã sửa thông tin!");
-    editingRepairIndex = -1;
-  } else {
-    repairs.unshift({ phutung, diadiem, thoigian, chiphi: parsedChiPhi });
+  const old = repairs[editingRepairIndex];   // 🔥 GIỮ BẢN CŨ
+
+  repairs[editingRepairIndex] = {
+    ...old,                // 🔥 QUAN TRỌNG NHẤT
+    phutung,
+    diadiem,
+    thoigian,
+    chiphi: parsedChiPhi,
+    lastModified: Date.now()
+  };
+
+  showToast("✏️ Đã sửa thông tin!");
+  editingRepairIndex = -1;
+} else {
+  repairs.unshift({
+    id: "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+
+    phutung,
+    diadiem,
+    thoigian,
+    chiphi: parsedChiPhi,
+
+    deleted: false,
+    deletedAt: null,
+
+    createdAt: Date.now(),
+    lastModified: Date.now()
+  });
+
+
+
     showToast("✅ Đã thêm mới thông tin!");
   }
 
@@ -2207,13 +2228,21 @@ function renderRepairTable() {
 
   const searchText = (document.getElementById("repairSearchInput")?.value || "").toLowerCase();
 
-  const filteredRepairs = repairs.filter(item => {
+  const filteredRepairs = repairs
+  .filter(item => item.deleted !== true)   // 👈 thêm đúng 1 dòng này
+  .filter(item => {
     const pt = item.phutung?.toLowerCase() || "";
     const dd = item.diadiem?.toLowerCase() || "";
     const tg = item.thoigian?.toLowerCase() || "";
     const cp = item.chiphi?.toString() || "";
-    return pt.includes(searchText) || dd.includes(searchText) || tg.includes(searchText) || cp.includes(searchText);
+    return (
+      pt.includes(searchText) ||
+      dd.includes(searchText) ||
+      tg.includes(searchText) ||
+      cp.includes(searchText)
+    );
   });
+
 
   filteredRepairs.sort((a, b) => {
     const [d1, m1, y1] = a.thoigian.split("/").map(Number);
@@ -2238,10 +2267,10 @@ function renderRepairTable() {
 
     row.addEventListener("contextmenu", e => {
       e.preventDefault();
-      editRepair(originalIndex);
+      editRepair(item.id);
     });
 
-    row.addEventListener("dblclick", () => confirmDelete1(originalIndex));
+    row.addEventListener("dblclick", () => confirmDelete1(item.id));
 
     row.innerHTML = `
       <td>${startIndex + displayIndex + 1}</td>
@@ -2296,38 +2325,46 @@ function renderRepairPagination(totalItems) {
 // =============================
 //  DELETE + EDIT
 // =============================
-function confirmDelete1(index) {
+function confirmDelete1(repairId) {
   const username =
-    window.currentUser ||
-    localStorage.getItem("currentUser") ||
-    "default";
+    window.currentUser || localStorage.getItem("currentUser") || "default";
+
+  const index = repairs.findIndex(r => r.id === repairId);
+  if (index === -1) return;
 
   const item = repairs[index];
-  const message = `Bạn có chắc muốn xoá dòng sau?\n- Phụ tùng: ${item.phutung}\n- Chi phí: ${item.chiphi.toLocaleString("vi-VN")} VND`;
 
-  showConfirmModal(message, () => {
-    repairs.splice(index, 1);
-    showToast("🗑️ Đã xoá phụ tùng sửa chữa");
+  showConfirmModal(`Xoá ${item.phutung}?`, () => {
+    repairs[index] = {
+      ...item,
+      deleted: true,
+      deletedAt: Date.now(),
+      lastModified: Date.now()
+    };
 
     localStorage.setItem(`repairs_${username}`, JSON.stringify(repairs));
     if (typeof dataChangedFlagSet === "function") dataChangedFlagSet();
 
-    if ((repairPage - 1) * repairRowsPerPage >= repairs.length) repairPage = Math.max(1, repairPage - 1);
     renderRepairTable();
   });
 }
 
-function editRepair(index) {
-  const item = repairs[index];
-  currentEditingIndex = index;
 
-  document.getElementById("editPhutungInput").value = item.phutung;
-  document.getElementById("editDiadiemInput").value = item.diadiem;
-  document.getElementById("editThoigianInput").value = item.thoigian;
-  document.getElementById("editChiphiInput").value = item.chiphi.toLocaleString("vi-VN");
+function editRepair(repairId) {
+  const index = repairs.findIndex(r => r.id === repairId);
+  if (index === -1) return;
 
+  editingRepairIndex = index;
+
+  const r = repairs[index];
+  document.getElementById("editPhutungInput").value = r.phutung;
+  document.getElementById("editDiadiemInput").value = r.diadiem;
+  document.getElementById("editThoigianInput").value = r.thoigian;
+  document.getElementById("editChiphiInput").value =
+    r.chiphi.toLocaleString("vi-VN");
   showEditRepairModal();
 }
+
 
 function showEditRepairModal() {
   const modal = document.getElementById("editRepairModal");
@@ -2335,6 +2372,8 @@ function showEditRepairModal() {
 }
 
 function saveEditedRepair() {
+  if (editingRepairIndex < 0) return;
+
   const pt = document.getElementById("editPhutungInput").value.trim();
   const dd = document.getElementById("editDiadiemInput").value.trim();
   const tg = document.getElementById("editThoigianInput").value.trim();
@@ -2343,20 +2382,31 @@ function saveEditedRepair() {
   const parsedCost = parseInt(cp.replace(/\./g, ""));
   const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
 
-  if (!pt || !dd || !tg || !cp) return alert("Vui lòng điền đầy đủ thông tin!");
-  if (!dateRegex.test(tg)) return alert("Sai định dạng ngày. Dùng dd/mm/yyyy.");
+  if (!pt || !dd || !tg || !cp)
+    return alert("Vui lòng điền đầy đủ thông tin!");
 
-  repairs[currentEditingIndex] = {
+  if (!dateRegex.test(tg))
+    return alert("Sai định dạng ngày. Dùng dd/mm/yyyy.");
+
+  const old = repairs[editingRepairIndex]; // 🔥 GIỮ RECORD CŨ
+
+  repairs[editingRepairIndex] = {
+    ...old,                // 🔥 GIỮ ID + META
     phutung: pt,
     diadiem: dd,
     thoigian: tg,
     chiphi: parsedCost,
+    lastModified: Date.now()
   };
+
+  editingRepairIndex = -1;
 
   saveRepairs();
   renderRepairTable();
   closeEditRepairModal();
+  showToast("✏️ Đã cập nhật sửa chữa");
 }
+
 // Import JSON repairs
 function handleRepairJsonImport(event) {
   const file = event.target.files[0];
@@ -3414,54 +3464,87 @@ window.closeModal = function(id) {
 
 <script type="module">
 import {
-  getFirestore, collection, doc, getDoc, setDoc
+  getFirestore, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 window.db = getFirestore();
 
-// 🔄 LẤY DỮ LIỆU SỬA XE TỪ CLOUD → MERGE → LƯU LOCAL
-async function syncRepairFromCloud(username) {
-    if (!db) {
-        console.error("Firestore chưa được khởi tạo!");
-        return;
+/* ============================================================
+   🔄  SYNC REPAIR: FIREBASE → LOCAL (MERGE THEO ID)
+============================================================ */
+window.syncRepairFromCloud = async function (username) {
+  if (!window.db) {
+    console.error("Firestore chưa khởi tạo");
+    return [];
+  }
+
+  const userRef = doc(window.db, "users", username);
+  const snap = await getDoc(userRef);
+
+  const cloudRepairs = snap.exists()
+    ? Array.isArray(snap.data().repairs) ? snap.data().repairs : []
+    : [];
+
+  const localKey = `repairs_${username}`;
+  let localRepairs = JSON.parse(localStorage.getItem(localKey) || "[]");
+
+  const merged = mergeRepairsById(localRepairs, cloudRepairs);
+
+  localStorage.setItem(localKey, JSON.stringify(merged));
+  console.log("✅ Sync repair xong:", merged);
+
+  return merged;
+};
+
+
+/* ============================================================
+   🔥  MERGE REPAIR CHUẨN THEO ID + LAST MODIFIED
+============================================================ */
+function mergeRepairsById(localArr, cloudArr) {
+  const map = new Map();
+
+  // 1️⃣ Đưa local vào map
+  localArr.forEach(r => {
+    if (!r.id) r.id = genRepairId();
+    map.set(r.id, r);
+  });
+
+  // 2️⃣ Merge cloud
+  cloudArr.forEach(r => {
+    if (!r.id) r.id = genRepairId();
+
+    const local = map.get(r.id);
+
+    // 🔥 CLOUD DELETE THẮNG
+    if (r.deleted === true) {
+      map.delete(r.id);
+      return;
     }
 
-    const userRef = doc(db, "users", username);
-    const snap = await getDoc(userRef);
-
-    let cloudRepairs = [];
-    if (snap.exists()) {
-        const cloudData = snap.data();
-        cloudRepairs = Array.isArray(cloudData.repairs) ? cloudData.repairs : [];
+    // Nếu local chưa có → thêm
+    if (!local) {
+      map.set(r.id, r);
+      return;
     }
 
-    // Lấy local
-    const localKey = `repairs_${username}`;
-    const localRepairs = JSON.parse(localStorage.getItem(localKey) || "[]");
+    // So sánh lastModified
+    const cloudTime = r.lastModified || 0;
+    const localTime = local.lastModified || 0;
 
-    // Merge KHÔNG trùng
-    const merged = mergeRepairs(localRepairs, cloudRepairs);
+    if (cloudTime > localTime) {
+      map.set(r.id, r);
+    }
+  });
 
-    // Lưu local
-    localStorage.setItem(localKey, JSON.stringify(merged));
-
-    console.log("🔄 Merge sửa xe xong:", merged);
-    return merged;
-}
-window.syncRepairFromCloud = syncRepairFromCloud;
-
-// ---- Merge chuẩn nhất ----
-function genKey(r) {
-    return `${r.phutung}|${r.diadiem}|${r.thoigian}|${r.chiphi}`;
+  return Array.from(map.values());
 }
 
-function mergeRepairs(localArr, cloudArr) {
-    const map = new Map();
 
-    localArr.forEach(r => map.set(genKey(r), r));
-    cloudArr.forEach(r => map.set(genKey(r), r));
-
-    return Array.from(map.values());
+/* ============================================================
+   🆔  GEN ID
+============================================================ */
+function genRepairId() {
+  return "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 }
 </script>
 
