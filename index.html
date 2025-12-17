@@ -2414,32 +2414,44 @@ function handleRepairJsonImport(event) {
 
   const reader = new FileReader();
 
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     try {
-      const jsonData = JSON.parse(e.target.result);
+      const imported = JSON.parse(e.target.result);
 
-      if (!Array.isArray(jsonData)) {
-        alert("❌ File JSON không hợp lệ! Định dạng phải là mảng []");
+      if (!Array.isArray(imported)) {
+        alert("❌ File JSON không hợp lệ! Phải là mảng []");
         return;
       }
 
-      // Lấy user hiện tại
-      const username = window.currentUser || localStorage.getItem("currentUser") || "nhi";
+      const username =
+        window.currentUser ||
+        localStorage.getItem("currentUser") ||
+        "nhi";
 
-      // Lưu vào localStorage theo từng user
-      localStorage.setItem(`repairs_${username}`, JSON.stringify(jsonData));
+      const normalized = imported.map(r => ({
+        id: r.id || genRepairId(),        // ✅ CHỈ VIỆC NÀY
+        phutung: r.phutung || "",
+        diadiem: r.diadiem || "",
+        thoigian: r.thoigian || "",
+        chiphi: Number(r.chiphi) || 0,
 
-      // Cập nhật biến repairs đang dùng trong UI
-      window.repairs = jsonData;
+        // giữ nếu có, không thì set mặc định
+        deleted: r.deleted === true,
+        deletedAt: r.deletedAt ?? null,
+        createdAt: r.createdAt || Date.now(),
+        lastModified: r.lastModified || Date.now()
+      }));
 
-      // Render lại bảng
-      if (typeof renderRepairTable === "function") {
-        renderRepairTable();
-      }
+      const localKey = `repairs_${username}`;
+      localStorage.setItem(localKey, JSON.stringify(normalized));
 
-      showToast("📥 Import danh sách sửa chữa thành công!");
+      window.repairs = normalized;
+      renderRepairTable();
 
-      console.log("📥 IMPORTED REPAIRS:", jsonData);
+      showToast("📥 Import sửa chữa thành công");
+
+      console.log("📥 IMPORT REPAIRS:", normalized);
+
     } catch (err) {
       console.error("Import JSON error:", err);
       alert("❌ File không đúng định dạng JSON!");
@@ -2448,6 +2460,7 @@ function handleRepairJsonImport(event) {
 
   reader.readAsText(file);
 }
+
 
 
 function closeEditRepairModal() {
