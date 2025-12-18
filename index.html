@@ -1760,7 +1760,7 @@ function exportToJson() {
         ? "all"
         : currentUser;
 
-  link.download = `tasks_${suffix}.json`;
+  link.download = `tasks_${currentUser}.json`;
   link.click();
 
   document.getElementById("exportModal").style.display = "none";
