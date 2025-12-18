@@ -1065,6 +1065,9 @@ function filterTasks() {
 
     return taskMatch && statusMatch && dateMatch;
   });
+   // 👇 LƯU KẾT QUẢ LỌC ĐỂ EXPORT DÙNG
+window.filteredTasksForExport = filteredTasks;
+
 
   // Sắp xếp: pinned > status > date
   filteredTasks.sort((a, b) => {
@@ -1154,6 +1157,7 @@ function filterTasks() {
   const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth()+1).padStart(2, '0')}/${today.getFullYear()}`;
   const updateDateEl = document.getElementById("updateDate");
   if (updateDateEl) updateDateEl.textContent = `Ngày cập nhật: ${formattedDate}`;
+
 }
 
 
@@ -1713,35 +1717,55 @@ function saveEdit(inputElement, field) {
 function exportToJson() {
   let tasksData = [];
 
-  if (currentUser === "all") {
-    // Gộp dữ liệu của tất cả người dùng (tự động)
-    tasksData = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key.startsWith("tasks_") && key !== "tasks_all") {
-        const data = JSON.parse(localStorage.getItem(key) || "[]");
-        tasksData = tasksData.concat(data);
-      }
-    }
-  } else {
-    tasksData = JSON.parse(localStorage.getItem(`tasks_${currentUser}`) || "[]");
+  // 🔹 ƯU TIÊN EXPORT THEO FILTER (NẾU CÓ)
+  if (Array.isArray(window.filteredTasksForExport)) {
+    tasksData = window.filteredTasksForExport;
   }
 
-  const blob = new Blob([JSON.stringify(tasksData, null, 2)], { type: "application/json" });
+  // 🔹 FALLBACK: GIỮ NGUYÊN LOGIC CŨ
+  if (!tasksData || tasksData.length === 0) {
+    if (currentUser === "all") {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith("tasks_") && key !== "tasks_all") {
+          const data = JSON.parse(localStorage.getItem(key) || "[]");
+          tasksData = tasksData.concat(data);
+        }
+      }
+    } else {
+      tasksData = JSON.parse(
+        localStorage.getItem(`tasks_${currentUser}`) || "[]"
+      );
+    }
+  }
+
+  if (!tasksData.length) {
+    alert("⚠️ Không có dữ liệu để export");
+    return;
+  }
+
+  const blob = new Blob(
+    [JSON.stringify(tasksData, null, 2)],
+    { type: "application/json" }
+  );
+
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
 
-  // 🔹 Tạo tên file tự động theo người dùng
-  const fileName =
-    currentUser === "all"
-      ? "tasks_all.json"
-      : `tasks_${currentUser}.json`;
+  // 🔹 Tên file thông minh
+  const suffix =
+    window.filteredTasksForExport && window.filteredTasksForExport.length
+      ? "filtered"
+      : currentUser === "all"
+        ? "all"
+        : currentUser;
 
-  link.download = fileName;
+  link.download = `tasks_${suffix}.json`;
   link.click();
-  document.getElementById("exportModal").style.display = "none";
 
+  document.getElementById("exportModal").style.display = "none";
 }
+
 
 
   </script>
