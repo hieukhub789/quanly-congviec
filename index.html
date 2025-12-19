@@ -660,7 +660,7 @@
 
 </head>
 <body>
-  <h2 style="text-align: center; color: #2c3e50;">Ứng dụng Quản lý Công việc Cá nhân và Nhóm</h2>
+  <h2 style="text-align: center; color: #2c3e50;">Ứng dụng Quản lý Công việc Cá Nhân và Nhóm 2.0</h2>
   <div class="toast-container" id="toastContainer"></div>
   <!-- Ghi chú nhanh -->
 
@@ -771,7 +771,7 @@
 <!-- Modal thêm người dùng mới -->
 <div id="addUserModal" class="modal" style="display:none;">
   <div class="modal-content" style="max-width:350px; text-align:center;">
-    <span class="close" onclick="closeModal('addUserModal')" style="float:right;">&times;</span>
+    <span class="close" onclick="closeAddUserModal()" style="float:right;">&times;</span>
     <h3 id="userModalTitle">👤 Thêm người dùng mới</h3>
     <input type="text" id="newUserName" placeholder="Nhập tên người dùng..." 
            style="width:90%; padding:8px; border-radius:8px; border:1px solid #ccc;">
@@ -3639,6 +3639,27 @@ window.handleRenameUser = function () {
     window.openRenameUserModal(); // ✏️ Sửa
   }
 };
+
+function resetRenameUserState() {
+  window.dangSuaUser = false;
+
+  const btn = document.getElementById("renameUserBtn");
+  if (btn) btn.textContent = "✏️ Sửa";
+
+  const title = document.getElementById("userModalTitle");
+  if (title) title.textContent = "👤 Thêm người dùng mới";
+
+  const input = document.getElementById("newUserName");
+  if (input) input.value = "";
+}
+window.closeAddUserModal = function () {
+  const modal = document.getElementById("addUserModal");
+  if (modal) modal.style.display = "none";
+
+  // 🔥 reset trạng thái rename
+  resetRenameUserState();
+};
+
 
 
 /* ======================================================
