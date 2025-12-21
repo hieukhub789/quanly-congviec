@@ -3768,6 +3768,68 @@ function genRepairId() {
   return "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 }
 </script>
+<script>
+  (function autoReloadAt5AM() {
+  function getMsUntilNext5AM() {
+    const now = new Date();
+    const next5AM = new Date();
+
+    next5AM.setHours(5, 0, 0, 0);
+
+    // nếu đã qua 5h sáng hôm nay → lấy 5h sáng ngày mai
+    if (now >= next5AM) {
+      next5AM.setDate(next5AM.getDate() + 1);
+    }
+
+    return next5AM - now;
+  }
+
+  const ms = getMsUntilNext5AM();
+
+  console.log("⏰ App sẽ tự reload lúc 5:00 sáng sau:", new Date(Date.now() + ms));
+
+  setTimeout(() => {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  localStorage.setItem("lastAutoReloadDay", todayKey);
+  location.reload();
+}, ms);
+
+})();
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+
+  // 🛑 Đang gõ thì KHÔNG reload
+  const el = document.activeElement;
+  if (
+    el &&
+    (
+      el.tagName === "INPUT" ||
+      el.tagName === "TEXTAREA" ||
+      el.isContentEditable
+    )
+  ) {
+    console.log("⏸️ Đang nhập liệu → bỏ qua auto reload");
+    return;
+  }
+
+  const now = new Date();
+
+  // Chỉ reload sau 5h sáng
+  if (now.getHours() < 5) return;
+
+  const todayKey = now.toISOString().slice(0, 10);
+  const lastReloadDay = localStorage.getItem("lastAutoReloadDay");
+
+  // Mỗi ngày chỉ reload 1 lần
+  if (lastReloadDay === todayKey) return;
+
+  localStorage.setItem("lastAutoReloadDay", todayKey);
+
+  console.log("🔄 Auto reload sau 5h sáng");
+  location.reload();
+});
+
+</script>
 
 
 
