@@ -3152,6 +3152,18 @@ function showSystemNotification(title, message, type = "info") {
 
     syncInProgress = true;
     tinyToast("🔄 Đồng bộ Firebase...");
+    const snap = await getDoc(doc(window.db, "users", user));
+    if (!snap.exists()) {
+    showToast("⚠️ User đã bị đổi tên hoặc xoá từ máy khác. Không thể ghi.");
+    await loadUsersFromFirebase();
+    return;
+    }
+
+  // ⬇️ chỉ khi user còn tồn tại mới được ghi
+  await setDoc(doc(window.db, "users", user), {
+    tasks: tasks,
+    lastSync: new Date().toISOString()
+  }, { merge: true });
 
     try {
 
