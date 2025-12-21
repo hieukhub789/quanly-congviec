@@ -3142,13 +3142,57 @@ function showSystemNotification(title, message, type = "info") {
   /* ============================================================
         HÀM ĐỒNG BỘ LOCAL → CLOUD  (CÓ THÊM ID)
   ============================================================ */
+  async function isCurrentUserStillValid() {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  if (!user || user === "all") return true;
+
+  try {
+    const usersCol = collection(window.db, "users");
+    const snapshot = await getDocs(usersCol);
+    const cloudUsers = snapshot.docs.map(d => d.id);
+
+    return cloudUsers.includes(user);
+  } catch (err) {
+    console.warn("⚠️ Không kiểm tra được user:", err);
+    return true; // fail-safe: đừng block khi mạng lỗi
+  }
+}
+
   async function syncToFirestoreAll(){
     if (!db) return console.warn("Firestore not initialized");
     if (window.__preventAutoSync) return; 
     if (syncInProgress) return;
 
+    const syncingUser = window.currentUser;
+    if (!syncingUser || syncingUser === "all") return;
+
     syncInProgress = true;
     tinyToast("🔄 Đồng bộ Firebase...");
+    try {
+    // 🔒 KIỂM TRA TRƯỚC KHI GHI
+    const isValid = await isCurrentUserStillValid();
+    if (!isValid) {
+      showToast(
+        "⚠️ User đã bị đổi tên hoặc xoá từ máy khác. Dữ liệu KHÔNG được lưu."
+      );
+      return; // ⛔ CHẶN GHI
+    }
+
+    await setDoc(
+      doc(window.db, "users", syncingUser),
+      {
+        tasks: [...tasks], // clone
+        lastSync: new Date().toISOString()
+      },
+      { merge: true }
+    );
+
+  } catch (err) {
+    console.error("Sync error:", err);
+    showToast("❌ Không thể đồng bộ dữ liệu");
+  } finally {
+    syncInProgress = false;
+  }
 
     try {
 
