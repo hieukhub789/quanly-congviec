@@ -3093,7 +3093,11 @@ function showSystemNotification(title, message, type = "info") {
 
 <!-- Auto-sync to Firestore (injected by assistant) -->
 <script type="module">
-  import { setDoc, doc, getDoc } 
+  import { doc,
+    getDoc,
+    setDoc,
+    collection,
+    getDocs} 
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const db = window.db;
