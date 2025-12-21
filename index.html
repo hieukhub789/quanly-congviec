@@ -3172,7 +3172,7 @@ function showSystemNotification(title, message, type = "info") {
 
     syncInProgress = true;
     tinyToast("🔄 Đồng bộ Firebase...");
-    try {
+   
     // 🔒 KIỂM TRA TRƯỚC KHI GHI
     const isValid = await isCurrentUserStillValid();
     if (!isValid) {
@@ -3190,14 +3190,7 @@ function showSystemNotification(title, message, type = "info") {
       },
       { merge: true }
     );
-
-  } catch (err) {
-    console.error("Sync error:", err);
-    showToast("❌ Không thể đồng bộ dữ liệu");
-  } finally {
-    syncInProgress = false;
-  }
-
+    
     try {
 
       /* 🔥🔥🔥 ĐIỂM SỬA QUAN TRỌNG NHẤT 🔥🔥🔥 */
