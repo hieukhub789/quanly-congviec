@@ -2818,6 +2818,9 @@ async function changeUser() {
   if (typeof window.syncFromFirebase === "function") {
     await window.syncFromFirebase(); // 🔥 Y HỆT CLICK BUTTON
   }
+  if (typeof window.silentSyncAll === "function") {
+  window.silentSyncAll();
+  }
 
   // ===============================
   // 4️⃣ UPDATE UI SAU KHI SYNC
@@ -3768,68 +3771,77 @@ function genRepairId() {
   return "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 }
 </script>
-<script>
-  (function autoReloadAt5AM() {
-  function getMsUntilNext5AM() {
-    const now = new Date();
-    const next5AM = new Date();
+<script type="module">
+import {
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    next5AM.setHours(5, 0, 0, 0);
+window.silentSyncAll = async function () {
+  const user = window.currentUser || localStorage.getItem("currentUser");
+  if (!user || user === "all") return;
 
-    // nếu đã qua 5h sáng hôm nay → lấy 5h sáng ngày mai
-    if (now >= next5AM) {
-      next5AM.setDate(next5AM.getDate() + 1);
-    }
+  console.log("🔄 Silent sync for user:", user);
 
-    return next5AM - now;
-  }
-
-  const ms = getMsUntilNext5AM();
-
-  console.log("⏰ App sẽ tự reload lúc 5:00 sáng sau:", new Date(Date.now() + ms));
-
-  setTimeout(() => {
-  const todayKey = new Date().toISOString().slice(0, 10);
-  localStorage.setItem("lastAutoReloadDay", todayKey);
-  location.reload();
-}, ms);
-
-})();
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return;
-
-  // 🛑 Đang gõ thì KHÔNG reload
-  const el = document.activeElement;
-  if (
-    el &&
-    (
-      el.tagName === "INPUT" ||
-      el.tagName === "TEXTAREA" ||
-      el.isContentEditable
-    )
-  ) {
-    console.log("⏸️ Đang nhập liệu → bỏ qua auto reload");
+  // 1️⃣ kiểm tra user còn tồn tại
+  const userSnap = await getDoc(doc(window.db, "users", user));
+  if (!userSnap.exists()) {
+    showToast("⚠️ User đã bị đổi tên hoặc xoá. Vui lòng chọn user khác.");
+    await loadUsersFromFirebase();
     return;
   }
 
-  const now = new Date();
+  // 2️⃣ sync TASK
+  if (typeof window.syncFromFirebase === "function") {
+    await window.syncFromFirebase(user);
+  }
 
-  // Chỉ reload sau 5h sáng
+  // 3️⃣ sync REPAIR
+  if (typeof window.syncRepairFromCloud === "function") {
+    await window.syncRepairFromCloud(user);
+  }
+
+  // 4️⃣ sync NOTE
+  const cloudData = userSnap.data();
+  if (cloudData.notes !== undefined) {
+    localStorage.setItem(`ghiChu_${user}`, cloudData.notes);
+  }
+
+  // 5️⃣ update UI
+  if (typeof filterTasks === "function") filterTasks();
+  if (typeof renderRepairTable === "function") renderRepairTable();
+
+  console.log("✅ Silent sync done");
+};
+
+// 👁️ quay lại tab
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+
+  const el = document.activeElement;
+  if (
+    el &&
+    (el.tagName === "INPUT" ||
+     el.tagName === "TEXTAREA" ||
+     el.isContentEditable)
+  ) return;
+
+  const now = new Date();
   if (now.getHours() < 5) return;
 
   const todayKey = now.toISOString().slice(0, 10);
-  const lastReloadDay = localStorage.getItem("lastAutoReloadDay");
+  if (localStorage.getItem("lastSilentSyncDay") === todayKey) return;
 
-  // Mỗi ngày chỉ reload 1 lần
-  if (lastReloadDay === todayKey) return;
-
-  localStorage.setItem("lastAutoReloadDay", todayKey);
-
-  console.log("🔄 Auto reload sau 5h sáng");
-  location.reload();
+  localStorage.setItem("lastSilentSyncDay", todayKey);
+  window.silentSyncAll();
 });
 
+// ⏱️ sync định kỳ
+setInterval(() => {
+  if (!document.hidden) window.silentSyncAll();
+}, 15 * 60 * 1000);
 </script>
+
 
 
 
