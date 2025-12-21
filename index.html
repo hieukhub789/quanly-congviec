@@ -3150,20 +3150,37 @@ function showSystemNotification(title, message, type = "info") {
     if (window.__preventAutoSync) return; 
     if (syncInProgress) return;
 
+    const user = window.currentUser || localStorage.getItem("currentUser");
+    if (!user || user === "all") return;
+
+
     syncInProgress = true;
     tinyToast("🔄 Đồng bộ Firebase...");
+    try {
+    // 🔥 CHẶN GHI NẾU USER KHÔNG CÒN
     const snap = await getDoc(doc(window.db, "users", user));
     if (!snap.exists()) {
-    showToast("⚠️ User đã bị đổi tên hoặc xoá từ máy khác. Không thể ghi.");
-    await loadUsersFromFirebase();
-    return;
+      showToast("⚠️ User đã bị đổi tên hoặc xoá từ máy khác. Không thể ghi.");
+      await loadUsersFromFirebase();
+      return; // ⛔ DỪNG LUỒNG GHI
     }
 
-  // ⬇️ chỉ khi user còn tồn tại mới được ghi
-  await setDoc(doc(window.db, "users", user), {
-    tasks: tasks,
-    lastSync: new Date().toISOString()
-  }, { merge: true });
+    // ⬇️ CHỈ GHI KHI USER CÒN TỒN TẠI
+    await setDoc(
+      doc(window.db, "users", user),
+      {
+        tasks: tasks,
+        lastSync: new Date().toISOString()
+      },
+      { merge: true }
+    );
+
+  } catch (err) {
+    console.error("❌ Sync error:", err);
+    showToast("❌ Lỗi khi đồng bộ Firebase");
+  } finally {
+    syncInProgress = false; // 🔥 BẮT BUỘC
+  }
 
     try {
 
