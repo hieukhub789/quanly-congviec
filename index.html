@@ -3783,76 +3783,7 @@ function genRepairId() {
   return "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 }
 </script>
-<script type="module">
-import {
-  doc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-window.silentSyncAll = async function () {
-  const user = window.currentUser || localStorage.getItem("currentUser");
-  if (!user || user === "all") return;
-
-  console.log("🔄 Silent sync for user:", user);
-
-  // 1️⃣ kiểm tra user còn tồn tại
-  const userSnap = await getDoc(doc(window.db, "users", user));
-  if (!userSnap.exists()) {
-    showToast("⚠️ User đã bị đổi tên hoặc xoá. Vui lòng chọn user khác.");
-    await loadUsersFromFirebase();
-    return;
-  }
-
-  // 2️⃣ sync TASK
-  if (typeof window.syncFromFirebase === "function") {
-    await window.syncFromFirebase(user);
-  }
-
-  // 3️⃣ sync REPAIR
-  if (typeof window.syncRepairFromCloud === "function") {
-    await window.syncRepairFromCloud(user);
-  }
-
-  // 4️⃣ sync NOTE
-  const cloudData = userSnap.data();
-  if (cloudData.notes !== undefined) {
-    localStorage.setItem(`ghiChu_${user}`, cloudData.notes);
-  }
-
-  // 5️⃣ update UI
-  if (typeof filterTasks === "function") filterTasks();
-  if (typeof renderRepairTable === "function") renderRepairTable();
-
-  console.log("✅ Silent sync done");
-};
-
-// 👁️ quay lại tab
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) return;
-
-  const el = document.activeElement;
-  if (
-    el &&
-    (el.tagName === "INPUT" ||
-     el.tagName === "TEXTAREA" ||
-     el.isContentEditable)
-  ) return;
-
-  const now = new Date();
-  if (now.getHours() < 5) return;
-
-  const todayKey = now.toISOString().slice(0, 10);
-  if (localStorage.getItem("lastSilentSyncDay") === todayKey) return;
-
-  localStorage.setItem("lastSilentSyncDay", todayKey);
-  window.silentSyncAll();
-});
-
-// ⏱️ sync định kỳ
-setInterval(() => {
-  if (!document.hidden) window.silentSyncAll();
-}, 15 * 60 * 1000);
-</script>
 
 
 
