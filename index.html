@@ -3809,39 +3809,94 @@ function genRepairId() {
   return "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 }
 
- document.addEventListener("visibilitychange", async () => {
+ 
+</script>
+<script type="module">
+import { doc, getDoc } 
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+window.silentSyncAll = async function () {
+  const user = window.currentUser;
+  if (!user || user === "all") return;
+
+  try {
+    console.log("🔄 Silent sync for:", user);
+
+    const ref = doc(window.db, "users", user);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      showToast("⚠️ User đã bị đổi tên hoặc xoá từ thiết bị khác");
+      await loadUsersFromFirebase();
+      return;
+    }
+
+    const data = snap.data();
+
+    /* ===== TASK ===== */
+    if (Array.isArray(data.tasks)) {
+      window.tasks = [...data.tasks];
+      localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+    }
+
+    /* ===== REPAIR (nếu có) ===== */
+    if (Array.isArray(data.repairs)) {
+      window.repairs = [...data.repairs];
+      localStorage.setItem(`repairs_${user}`, JSON.stringify(window.repairs));
+    }
+
+    /* ===== NOTE ===== */
+    if (typeof data.notes === "string") {
+      localStorage.setItem(`ghiChu_${user}`, data.notes);
+    }
+
+    /* ===== CẬP NHẬT MỐC ===== */
+    if (data.lastSync) {
+      localStorage.setItem(`lastHandledSync_${user}`, data.lastSync);
+    }
+
+    /* ===== UI ===== */
+    if (typeof filterTasks === "function") filterTasks();
+    if (typeof renderRepairTable === "function") renderRepairTable();
+
+    console.log("✅ Silent sync done");
+
+  } catch (err) {
+    console.error("Silent sync error:", err);
+    showToast("❌ Lỗi khi đồng bộ dữ liệu");
+  }
+};
+
+document.addEventListener("visibilitychange", async () => {
   if (document.hidden) return;
+  if (window.__silentSyncing) return;
 
   const user = window.currentUser;
   if (!user || user === "all") return;
-  if (!window.db) return;
 
   try {
+    window.__silentSyncing = true;
+
     const snap = await getDoc(doc(window.db, "users", user));
     if (!snap.exists()) return;
 
     const cloudTime = snap.data().lastSync;
-    const localTime = localStorage.getItem(`lastSync_${user}`);
+    const handledTime = localStorage.getItem(`lastHandledSync_${user}`);
 
-    console.log("LOCAL:", localTime, "CLOUD:", cloudTime);
+    if (handledTime === cloudTime) return;
 
-    if (!localTime) {
-      localStorage.setItem(`lastSync_${user}`, cloudTime);
-      return;
-    }
+    showToast("🔄 Có thay đổi từ thiết bị khác → đang cập nhật");
+    await window.silentSyncAll();
 
-    if (cloudTime !== localTime) {
-      showToast("🔔 Dữ liệu đã thay đổi từ thiết bị khác");
-      await window.silentSyncAll();
-      localStorage.setItem(`lastSync_${user}`, cloudTime);
-    }
-
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error("Visibility sync error:", err);
+  } finally {
+    window.__silentSyncing = false;
   }
 });
 
 </script>
+
 
 
 
