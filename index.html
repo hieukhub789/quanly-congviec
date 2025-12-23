@@ -3885,7 +3885,7 @@ document.addEventListener("visibilitychange", async () => {
 
     if (handledTime === cloudTime) return;
 
-    showToast("🔄 Có thay đổi từ thiết bị khác → đang cập nhật");
+    
     await window.silentSyncAll();
 
   } catch (err) {
