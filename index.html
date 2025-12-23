@@ -3812,18 +3812,9 @@ function genRepairId() {
  
 </script>
 <script type="module">
-import { doc, getDoc }
+import { doc, getDoc } 
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-/* =========================
-   CONFIG
-========================= */
-const CLICK_SYNC_INTERVAL = 10 * 60 * 1000; // 10 phút
-window.__silentSyncing = false;
-
-/* =========================
-   CORE SYNC FUNCTION
-========================= */
 window.silentSyncAll = async function () {
   const user = window.currentUser;
   if (!user || user === "all") return;
@@ -3848,7 +3839,7 @@ window.silentSyncAll = async function () {
       localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
     }
 
-    /* ===== REPAIR ===== */
+    /* ===== REPAIR (nếu có) ===== */
     if (Array.isArray(data.repairs)) {
       window.repairs = [...data.repairs];
       localStorage.setItem(`repairs_${user}`, JSON.stringify(window.repairs));
@@ -3859,7 +3850,7 @@ window.silentSyncAll = async function () {
       localStorage.setItem(`ghiChu_${user}`, data.notes);
     }
 
-    /* ===== SYNC MARK ===== */
+    /* ===== CẬP NHẬT MỐC ===== */
     if (data.lastSync) {
       localStorage.setItem(`lastHandledSync_${user}`, data.lastSync);
     }
@@ -3876,9 +3867,6 @@ window.silentSyncAll = async function () {
   }
 };
 
-/* =========================
-   VISIBILITY AUTO SYNC (GIỮ NGUYÊN)
-========================= */
 document.addEventListener("visibilitychange", async () => {
   if (document.hidden) return;
   if (window.__silentSyncing) return;
@@ -3895,9 +3883,10 @@ document.addEventListener("visibilitychange", async () => {
     const cloudTime = snap.data().lastSync;
     const handledTime = localStorage.getItem(`lastHandledSync_${user}`);
 
-    if (cloudTime && cloudTime !== handledTime) {
-      await window.silentSyncAll();
-    }
+    if (handledTime === cloudTime) return;
+
+    
+    await window.silentSyncAll();
 
   } catch (err) {
     console.error("Visibility sync error:", err);
@@ -3906,34 +3895,9 @@ document.addEventListener("visibilitychange", async () => {
   }
 });
 
-document.addEventListener("click", async () => {
-  if (window.__silentSyncing) return;
-
-  const user = window.currentUser;
-  if (!user || user === "all") return;
-
-  try {
-    window.__silentSyncing = true;
-
-    const snap = await getDoc(doc(window.db, "users", user));
-    if (!snap.exists()) return;
-
-    const cloudTime = snap.data().lastSync;
-    const handledTime = localStorage.getItem(`lastHandledSync_${user}`);
-
-    if (!cloudTime || cloudTime === handledTime) return;
-
-    console.log("🖱️ Auto sync triggered by click");
-    await window.silentSyncAll();
-
-  } catch (err) {
-    console.error("Click sync error:", err);
-  } finally {
-    window.__silentSyncing = false;
-  }
-});
-
 </script>
+
+
 
 
 <!-- End auto-sync module -->
