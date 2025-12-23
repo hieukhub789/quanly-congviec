@@ -3808,6 +3808,39 @@ function mergeRepairsById(localArr, cloudArr) {
 function genRepairId() {
   return "repair_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
 }
+
+ document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) return;
+
+  const user = window.currentUser;
+  if (!user || user === "all") return;
+  if (!window.db) return;
+
+  try {
+    const snap = await getDoc(doc(window.db, "users", user));
+    if (!snap.exists()) return;
+
+    const cloudTime = snap.data().lastSync;
+    const localTime = localStorage.getItem(`lastSync_${user}`);
+
+    console.log("LOCAL:", localTime, "CLOUD:", cloudTime);
+
+    if (!localTime) {
+      localStorage.setItem(`lastSync_${user}`, cloudTime);
+      return;
+    }
+
+    if (cloudTime !== localTime) {
+      showToast("🔔 Dữ liệu đã thay đổi từ thiết bị khác");
+      await window.silentSyncAll();
+      localStorage.setItem(`lastSync_${user}`, cloudTime);
+    }
+
+  } catch (e) {
+    console.error(e);
+  }
+});
+
 </script>
 
 
