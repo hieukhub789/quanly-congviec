@@ -3883,30 +3883,21 @@ window.stopUserRealtime = function () {
 <script type="module">
 import { doc, getDoc } 
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-window.silentSyncAll = async function (source = "unknown") {
+window.silentSyncAll = async function () {
+  if (window.__silentSyncing) return;
+
   const user = window.currentUser;
   if (!user || user === "all") return;
 
-  const processingKey = `processingCloudSync_${user}`;
-
-  // 🔒 nếu đang xử lý rồi → bỏ
-  if (localStorage.getItem(processingKey)) return;
-
   try {
-    // 🔒 khóa ngay TỪ ĐẦU
-    localStorage.setItem(processingKey, "1");
     window.__silentSyncing = true;
+    window.__ignoreNextRealtime = true; // 🔒 QUAN TRỌNG
 
     const snap = await getDoc(doc(window.db, "users", user));
     if (!snap.exists()) return;
 
     const data = snap.data();
-    const cloudTime = data.lastSync;
 
-    const handledTime = localStorage.getItem(`lastHandledSync_${user}`);
-    if (!cloudTime || cloudTime === handledTime) return;
-
-    // ===== APPLY DATA =====
     if (Array.isArray(data.tasks)) {
       window.tasks = [...data.tasks];
       localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
@@ -3921,22 +3912,24 @@ window.silentSyncAll = async function (source = "unknown") {
       localStorage.setItem(`ghiChu_${user}`, data.notes);
     }
 
-    // 🔒 ĐÁNH DẤU ĐÃ XỬ LÝ cloudTime NÀY
-    localStorage.setItem(`lastHandledSync_${user}`, cloudTime);
+    if (data.lastSync) {
+      localStorage.setItem(`lastHandledSync_${user}`, data.lastSync);
+    }
 
     filterTasks();
     renderRepairTable();
 
-    console.log("✅ Silent sync done from:", source);
+    console.log("✅ Silent sync done");
 
-  } catch (err) {
-    console.error("Silent sync error:", err);
   } finally {
     window.__silentSyncing = false;
-    localStorage.removeItem(`processingCloudSync_${user}`);
+
+    // ⏱️ nhả cờ sau 300ms (đủ cho snapshot nội bộ trôi qua)
+    setTimeout(() => {
+      window.__ignoreNextRealtime = false;
+    }, 30000);
   }
 };
-
 
 
 
