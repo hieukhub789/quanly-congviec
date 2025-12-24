@@ -3889,7 +3889,7 @@ window.silentSyncAll = async function () {
   const user = window.currentUser;
   if (!user || user === "all") return;
 
- 
+  try {
     window.__silentSyncing = true;
     window.__ignoreNextRealtime = true; // 🔒 QUAN TRỌNG
 
@@ -3921,15 +3921,16 @@ window.silentSyncAll = async function () {
 
     console.log("✅ Silent sync done");
 
-  
+  } finally {
     window.__silentSyncing = false;
 
     // ⏱️ nhả cờ sau 300ms (đủ cho snapshot nội bộ trôi qua)
     setTimeout(() => {
       window.__ignoreNextRealtime = false;
-    }, 30000);
-  
+    }, 3000);
+  }
 };
+
 
 
 
