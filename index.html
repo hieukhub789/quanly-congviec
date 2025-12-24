@@ -2782,7 +2782,8 @@ async function changeUser() {
   currentUser = select.value;
   window.currentUser = currentUser;
   localStorage.setItem("currentUser", currentUser);
-
+  stopUserRealtime();
+  
   // Reset phân trang
   currentPage = 1;
 
@@ -2934,26 +2935,32 @@ window.changeUser = async function changeUser() {
   window.currentUser = newUser;
   localStorage.setItem("currentUser", newUser);
 
-  // 2️⃣ reset
+  // 2️⃣ DỪNG realtime cũ NGAY LẬP TỨC
+  stopUserRealtime();
+
+  // 3️⃣ reset UI
   currentPage = 1;
 
-  // 3️⃣ load local trước
+  // 4️⃣ load local trước (UX mượt)
   loadUserTasks();
   filterTasks();
-  
 
-  // 4️⃣ SYNC GIỐNG HỆT NÚT 🔄
-  if (typeof window.syncFromFirebase === "function" && newUser !== "all") {
+  // 5️⃣ sync giống nút 🔄 (CHỈ 1 LẦN)
+  if (newUser !== "all" && typeof window.syncFromFirebase === "function") {
     window.__preventAutoSync = true;
-    await window.syncFromFirebase();   // ← GIỐNG bấm nút
+    await window.syncFromFirebase();
     window.__preventAutoSync = false;
   }
 
-  // 5️⃣ render lại
+  // 6️⃣ render lại sau sync
   filterTasks();
+
+  // 7️⃣ 🔥 CHỈ BÂY GIỜ MỚI BẬT realtime
+  watchUserRealtime(newUser);
 
   showToast(`Đã chuyển sang: ${newUser === "all" ? "Tất cả" : newUser}`);
 };
+
 
 
 // Thêm người dùng mới
@@ -3030,6 +3037,8 @@ function deleteCurrentUser() {
   closeModal("addUserModal");
   loadUsers();
   changeUser();
+  stopUserRealtime();
+  
 }
 
 // --- Gọi khi load trang ---
@@ -3672,6 +3681,7 @@ window.renameCurrentUser = async function () {
     console.error("Rename user error:", err);
     showToast("❌ Không thể đổi tên user!");
   }
+  stopUserRealtime();
 };
 window.handleRenameUser = function () {
   if (window.dangSuaUser) {
@@ -3812,63 +3822,68 @@ function genRepairId() {
  
 </script>
 <script type="module">
-import { doc, getDoc } 
+import { doc, onSnapshot } 
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-window.silentSyncAll = async function () {
-  const user = window.currentUser;
+window.realtimeUnsub = null;
+window.__realtimeSyncTimer = null;
+window.__ignoreNextRealtime = false;
+
+window.watchUserRealtime = function (user) {
+  if (typeof realtimeUnsub === "function") {
+    realtimeUnsub();
+    realtimeUnsub = null;
+  }
+
   if (!user || user === "all") return;
 
-  try {
-    console.log("🔄 Silent sync for:", user);
+  const ref = doc(window.db, "users", user);
 
-    const ref = doc(window.db, "users", user);
-    const snap = await getDoc(ref);
+  realtimeUnsub = onSnapshot(ref, (snap) => {
+    if (!snap.exists()) return;
 
-    if (!snap.exists()) {
-      showToast("⚠️ User đã bị đổi tên hoặc xoá từ thiết bị khác");
-      await loadUsersFromFirebase();
+    // 🚫 BỎ QUA snapshot do chính máy này gây ra
+    if (window.__ignoreNextRealtime) {
+      console.log("⏭️ Ignore internal realtime");
       return;
     }
 
-    const data = snap.data();
+    const cloudTime = snap.data().lastSync;
+    const handledTime = localStorage.getItem(`lastHandledSync_${user}`);
 
-    /* ===== TASK ===== */
-    if (Array.isArray(data.tasks)) {
-      window.tasks = [...data.tasks];
-      localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+    if (!cloudTime || cloudTime === handledTime) return;
+
+    console.log("🔔 Realtime change from OTHER device");
+
+    if (window.__realtimeSyncTimer) {
+      clearTimeout(window.__realtimeSyncTimer);
     }
 
-    /* ===== REPAIR (nếu có) ===== */
-    if (Array.isArray(data.repairs)) {
-      window.repairs = [...data.repairs];
-      localStorage.setItem(`repairs_${user}`, JSON.stringify(window.repairs));
-    }
+    window.__realtimeSyncTimer = setTimeout(async () => {
+      showToast("🔄 Dữ liệu thay đổi từ thiết bị khác");
 
-    /* ===== NOTE ===== */
-    if (typeof data.notes === "string") {
-      localStorage.setItem(`ghiChu_${user}`, data.notes);
-    }
+      if (typeof window.silentSyncAll === "function") {
+        await window.silentSyncAll();
+      }
 
-    /* ===== CẬP NHẬT MỐC ===== */
-    if (data.lastSync) {
-      localStorage.setItem(`lastHandledSync_${user}`, data.lastSync);
-    }
-
-    /* ===== UI ===== */
-    if (typeof filterTasks === "function") filterTasks();
-    if (typeof renderRepairTable === "function") renderRepairTable();
-
-    console.log("✅ Silent sync done");
-
-  } catch (err) {
-    console.error("Silent sync error:", err);
-    showToast("❌ Lỗi khi đồng bộ dữ liệu");
-  }
+      window.__realtimeSyncTimer = null;
+    }, 5000);
+  });
 };
 
-document.addEventListener("visibilitychange", async () => {
-  if (document.hidden) return;
+
+window.stopUserRealtime = function () {
+  if (typeof realtimeUnsub === "function") {
+    realtimeUnsub();
+    realtimeUnsub = null;
+    console.log("🛑 Stop realtime listener");
+  }
+};
+</script>
+<script type="module">
+import { doc, getDoc } 
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+window.silentSyncAll = async function () {
   if (window.__silentSyncing) return;
 
   const user = window.currentUser;
@@ -3876,26 +3891,50 @@ document.addEventListener("visibilitychange", async () => {
 
   try {
     window.__silentSyncing = true;
+    window.__ignoreNextRealtime = true; // 🔒 QUAN TRỌNG
 
     const snap = await getDoc(doc(window.db, "users", user));
     if (!snap.exists()) return;
 
-    const cloudTime = snap.data().lastSync;
-    const handledTime = localStorage.getItem(`lastHandledSync_${user}`);
+    const data = snap.data();
 
-    if (handledTime === cloudTime) return;
+    if (Array.isArray(data.tasks)) {
+      window.tasks = [...data.tasks];
+      localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
+    }
 
-    
-    await window.silentSyncAll();
+    if (Array.isArray(data.repairs)) {
+      window.repairs = [...data.repairs];
+      localStorage.setItem(`repairs_${user}`, JSON.stringify(window.repairs));
+    }
 
-  } catch (err) {
-    console.error("Visibility sync error:", err);
+    if (typeof data.notes === "string") {
+      localStorage.setItem(`ghiChu_${user}`, data.notes);
+    }
+
+    if (data.lastSync) {
+      localStorage.setItem(`lastHandledSync_${user}`, data.lastSync);
+    }
+
+    filterTasks();
+    renderRepairTable();
+
+    console.log("✅ Silent sync done");
+
   } finally {
     window.__silentSyncing = false;
+
+    // ⏱️ nhả cờ sau 300ms (đủ cho snapshot nội bộ trôi qua)
+    setTimeout(() => {
+      window.__ignoreNextRealtime = false;
+    }, 300);
   }
-});
+};
+
+
 
 </script>
+
 
 
 
