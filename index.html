@@ -3249,12 +3249,15 @@ function showSystemNotification(title, message, type = "info") {
             finalNote = cloudData.notes;
           }
 
-          const payload = {
-            username,
-            tasks,
-            notes: finalNote,
-            lastSync: new Date().toISOString(),
-          };
+          const taskPayload = encodeTasks(tasks);
+
+const payload = {
+  username,
+  ...taskPayload,       // 🔥 tasks được shard
+  notes: finalNote,
+  lastSync: new Date().toISOString(),
+};
+
 
           // Không ghi đè repairs nếu local rỗng
           if (Array.isArray(repairs) && repairs.length > 0){
@@ -3317,7 +3320,7 @@ function showSystemNotification(title, message, type = "info") {
       }
 
       const data = snap.data();
-      const cloudTasks = Array.isArray(data.tasks) ? data.tasks : [];
+      const cloudTasks = decodeTasks(data);
       console.log("🌩 Cloud tasks:", cloudTasks);
 
       let localTasks =
@@ -3932,6 +3935,40 @@ window.silentSyncAll = async function () {
 };
 
 
+// ================= ENCODE =================
+window.encodeTasks = function (tasks, shardSize = 100) {
+  const result = {
+    tasksShardCount: 0
+  };
+
+  let i = 0;
+  for (let idx = 0; idx < tasks.length; idx += shardSize) {
+    result[`tasks_${i}`] = tasks.slice(idx, idx + shardSize);
+    i++;
+  }
+
+  result.tasksShardCount = i;
+
+  // 🔥 chủ động xoá dấu vết cũ (khi merge)
+  result.tasks = null;
+
+  return result;
+};
+
+// ================= DECODE =================
+window.decodeTasks = function (data) {
+  // backward compatibility
+  if (Array.isArray(data.tasks)) return data.tasks;
+
+  const count = data.tasksShardCount || 0;
+  let all = [];
+
+  for (let i = 0; i < count; i++) {
+    all = all.concat(data[`tasks_${i}`] || []);
+  }
+
+  return all;
+};
 
 
 </script>
