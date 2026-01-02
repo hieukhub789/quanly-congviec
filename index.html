@@ -2695,19 +2695,24 @@ window.batCheDoSuaGhiChu = async function () {
 
     // 🔹 Sync cloud
     try {
-      await setDoc(
-        doc(window.db, "users", user),
-        {
-          notes: noiDung,
-          notesUpdatedAt: thoiGianHienTai
-        },
-        { merge: true }
-      );
-      showToast("✅ Ghi chú đã được lưu & đồng bộ Cloud.");
-    } catch (err) {
-      console.error("Lỗi lưu ghi chú lên Firebase:", err);
-      showToast("⚠️ Lưu cục bộ thành công, nhưng chưa đồng bộ được Cloud!");
-    }
+  const notePayload = encodeNotes(noiDung); // 👈 adapter
+
+  await setDoc(
+    doc(window.db, "users", user),
+    {
+      ...notePayload,
+      notesUpdatedAt: thoiGianHienTai
+    },
+    { merge: true }
+  );
+
+  showToast("✅ Ghi chú đã được lưu & đồng bộ Cloud.");
+
+} catch (err) {
+  console.error("Lỗi lưu ghi chú lên Firebase:", err);
+  showToast("⚠️ Lưu cục bộ thành công, nhưng chưa đồng bộ được Cloud!");
+}
+
 
     textarea.setAttribute("readonly", true);
     textarea.classList.add("readonly-field");
@@ -3968,6 +3973,46 @@ window.decodeTasks = function (data) {
   }
 
   return all;
+};
+
+// Note shard
+window.encodeNotes = function(noteText, shardSize = 8000) {
+  // backward: note ngắn → vẫn lưu 1 field
+  if (!noteText || noteText.length <= shardSize) {
+    return {
+      notes: noteText || "",
+      notesShardCount: 0
+    };
+  }
+
+  const result = {};
+  let i = 0;
+
+  for (let idx = 0; idx < noteText.length; idx += shardSize) {
+    result[`notes_${i}`] = noteText.slice(idx, idx + shardSize);
+    i++;
+  }
+
+  result.notesShardCount = i;
+  result.notes = null; // 🔥 xoá kiến trúc cũ có chủ đích
+
+  return result;
+};
+window.decodeNotes = function(data) {
+  // backward compatible
+  if (typeof data.notes === "string") {
+    return data.notes;
+  }
+
+  const count = data.notesShardCount || 0;
+  if (!count) return "";
+
+  let text = "";
+  for (let i = 0; i < count; i++) {
+    text += data[`notes_${i}`] || "";
+  }
+
+  return text;
 };
 
 
