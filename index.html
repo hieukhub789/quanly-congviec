@@ -104,6 +104,15 @@
       font-weight: bold;
       color: white;
     }
+    #noiDungGhiChu::selection {
+  background: #ffe066;
+  color: #000;
+}
+#noiDungGhiChu::-moz-selection {
+  background: #ffe066;
+  color: #000;
+}
+
     .edit-btn { background-color: #ffc107; }
     .delete-btn { background-color: #dc3545; }
     /* Tùy chỉnh chiều rộng cột trong bảng xuất */
@@ -931,6 +940,14 @@
 <div id="modalGhiChu" class="modal-ghichu">
   <div class="modal-ghichu-content">
     <h2>📝 Ghi Chú</h2>
+    <input
+  id="searchNoteInput"
+  type="text"
+  placeholder="🔍 Tìm trong ghi chú..."
+/>
+
+
+
     <textarea id="noiDungGhiChu" readonly class="ghichu-textarea"></textarea>
     <div class="ghichu-footer">
     <div id="thoiGianLuu" style="font-size: 13px; color: #666; margin-top: 6px;">
@@ -2665,6 +2682,57 @@ window.dongModalGhiChu = function () {
   cheDoSuaGhiChu = false; // 🔥 reset trạng thái
 };
 
+function scrollTextareaToIndex(textarea, index) {
+  const textBefore = textarea.value.slice(0, index);
+  const lineHeight = parseInt(getComputedStyle(textarea).lineHeight, 10) || 20;
+
+  const lineCount = textBefore.split("\n").length;
+  const scrollTop = (lineCount - 1) * lineHeight;
+
+  textarea.scrollTop = scrollTop - textarea.clientHeight / 2;
+}
+
+
+let lastIndex = -1;
+let lastKeyword = "";
+
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Enter") return;
+
+  const input = document.getElementById("searchNoteInput");
+  const ta = document.getElementById("noiDungGhiChu");
+  if (!input || !ta) return;
+
+  const keyword = input.value.trim();
+  if (!keyword) return;
+
+  e.preventDefault();
+
+  const text = ta.value;
+  const lower = text.toLowerCase();
+  const k = keyword.toLowerCase();
+
+  if (lastKeyword !== k) {
+    lastKeyword = k;
+    lastIndex = -1;
+  }
+
+  let idx = lower.indexOf(k, lastIndex + 1);
+  if (idx === -1) {
+    lastIndex = -1;
+    idx = lower.indexOf(k);
+    if (idx === -1) return alert("Không tìm thấy");
+  }
+
+  lastIndex = idx;
+
+  // 🔥 BẮT BUỘC focus textarea
+  ta.focus();
+  ta.setSelectionRange(idx, idx + keyword.length);
+
+  scrollTextareaToIndex(ta, idx);
+});
+
 // 🧩 Bật chế độ sửa hoặc lưu
 window.batCheDoSuaGhiChu = async function () {
   const user = window.currentUser || localStorage.getItem("currentUser");
@@ -4014,14 +4082,7 @@ window.decodeNotes = function(data) {
 
   return text;
 };
-
-
 </script>
-
-
-
-
-
 <!-- End auto-sync module -->
 </body>
 </html>
