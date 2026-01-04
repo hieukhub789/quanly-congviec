@@ -2242,16 +2242,46 @@ function addRepairRow() {
 // =============================
 // LOAD REPAIRS CHO USER
 // =============================
-function loadRepairsForUser() {
-  const username =
-    window.currentUser ||
-    localStorage.getItem("selectedUser") ||
-    localStorage.getItem("currentUser") ||
-    "default";
+function loadRepairsForUser(username) {
+  if (!username) return [];
 
-  repairs = JSON.parse(localStorage.getItem(`repairs_${username}`) || "[]");
-  renderRepairTable();
+  const key = "repairs_" + username;
+  const raw = localStorage.getItem(key);
+  if (!raw) return [];
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.warn("❌ repairs data is not valid JSON");
+    return [];
+  }
+
+  // 🟢 DATA MỚI: shard / encoded object
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    parsed.repairsShardCount !== undefined
+  ) {
+    return decodeRepairs(parsed);
+  }
+
+  // 🟡 DATA CŨ: array thuần
+  if (Array.isArray(parsed)) {
+    const encoded = encodeRepairs(parsed);
+
+    // 🔄 migrate sang shard (1 lần duy nhất)
+    localStorage.setItem(key, JSON.stringify(encoded));
+
+    return parsed;
+  }
+
+  // 🔴 dạng không xác định
+  console.warn("⚠️ Unknown repairs data format");
+  return [];
 }
+
+
 
 // =============================
 //  RENDER TABLE + SEARCH + SORT + PAGE
@@ -3288,7 +3318,7 @@ function showSystemNotification(title, message, type = "info") {
       for (const username of uniqUsers){
 
         let tasks = JSON.parse(localStorage.getItem("tasks_" + username) || "[]");
-        const repairs = JSON.parse(localStorage.getItem("repairs_" + username) || "[]");
+        const repairs = loadRepairsForUser(username);
 
         // ⭐ BỔ SUNG ID CHO TỪNG TASK (CHỈ LOCAL)
         tasks = tasks.map(task => {
@@ -3333,9 +3363,11 @@ const payload = {
 
 
           // Không ghi đè repairs nếu local rỗng
-          if (Array.isArray(repairs) && repairs.length > 0){
-            payload.repairs = repairs;
+          if (Array.isArray(repairs) && repairs.length > 0) {
+          const repairPayload = encodeRepairs(repairs);
+          Object.assign(payload, repairPayload);
           }
+
 
           await setDoc(userRef, payload, { merge: true });
           console.log(`✔ Synced user ${username}`);
@@ -3979,10 +4011,14 @@ window.silentSyncAll = async function () {
       localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
     }
 
-    if (Array.isArray(data.repairs)) {
-      window.repairs = [...data.repairs];
-      localStorage.setItem(`repairs_${user}`, JSON.stringify(window.repairs));
-    }
+    if (data.repairsShardCount !== undefined || Array.isArray(data.repairs)) {
+  window.repairs = decodeRepairs(data);
+  localStorage.setItem(
+    `repairs_${user}`,
+    JSON.stringify(window.repairs)
+  );
+}
+
 
     if (typeof data.notes === "string") {
       localStorage.setItem(`ghiChu_${user}`, data.notes);
@@ -4082,6 +4118,42 @@ window.decodeNotes = function(data) {
 
   return text;
 };
+
+// ================= ENCODE REPAIRS =================
+window.encodeRepairs = function (repairs, shardSize = 50) {
+  const result = {
+    repairsShardCount: 0
+  };
+
+  let i = 0;
+  for (let idx = 0; idx < repairs.length; idx += shardSize) {
+    result[`repairs_${i}`] = repairs.slice(idx, idx + shardSize);
+    i++;
+  }
+
+  result.repairsShardCount = i;
+
+  // 🔥 xoá mảng cũ để tránh merge nhầm
+  result.repairs = null;
+
+  return result;
+};
+
+// ================= DECODE REPAIRS =================
+window.decodeRepairs = function (data) {
+  // backward compatibility (dữ liệu cũ)
+  if (Array.isArray(data.repairs)) return data.repairs;
+
+  const count = data.repairsShardCount || 0;
+  let all = [];
+
+  for (let i = 0; i < count; i++) {
+    all = all.concat(data[`repairs_${i}`] || []);
+  }
+
+  return all;
+};
+
 </script>
 <!-- End auto-sync module -->
 </body>
