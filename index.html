@@ -3999,66 +3999,44 @@ window.silentSyncAll = async function () {
 
   try {
     window.__silentSyncing = true;
-    window.__ignoreNextRealtime = true;
+    window.__ignoreNextRealtime = true; // 🔒 QUAN TRỌNG
 
-    const ref = doc(window.db, "users", user);
-    const snap = await getDoc(ref);
+    const snap = await getDoc(doc(window.db, "users", user));
     if (!snap.exists()) return;
 
     const data = snap.data();
-    const cloudSync = data.lastSync;
 
-    // 🔒 ĐÃ APPLY RỒI → BỎ QUA
-    if (cloudSync && cloudSync === window.__lastCloudAppliedSync) {
-      return;
+    if (Array.isArray(data.tasks)) {
+      window.tasks = [...data.tasks];
+      localStorage.setItem(`tasks_${user}`, JSON.stringify(window.tasks));
     }
 
-    let localChanged = false;
-
-    /* ========= TASKS ========= */
-    if (data.tasksShardCount !== undefined || Array.isArray(data.tasks)) {
-      const decoded = decodeTasks(data);
-      if (JSON.stringify(decoded) !== JSON.stringify(window.tasks)) {
-        window.tasks = decoded;
-        localStorage.setItem(`tasks_${user}`, JSON.stringify(decoded));
-        localChanged = true;
-      }
-    }
-
-    /* ========= REPAIRS ========= */
     if (data.repairsShardCount !== undefined || Array.isArray(data.repairs)) {
-      const decoded = decodeRepairs(data);
-      if (JSON.stringify(decoded) !== JSON.stringify(window.repairs)) {
-        window.repairs = decoded;
-        localStorage.setItem(
-          `repairs_${user}`,
-          JSON.stringify(decoded)
-        );
-        localChanged = true;
-      }
-    }
+  window.repairs = decodeRepairs(data);
+  localStorage.setItem(
+    `repairs_${user}`,
+    JSON.stringify(window.repairs)
+  );
+}
+
 
     if (typeof data.notes === "string") {
       localStorage.setItem(`ghiChu_${user}`, data.notes);
     }
 
-    window.__lastCloudAppliedSync = cloudSync;
-    localStorage.setItem(`lastHandledSync_${user}`, cloudSync);
-
+    if (data.lastSync) {
+      localStorage.setItem(`lastHandledSync_${user}`, data.lastSync);
+    }
+    syncFromFirebase()
     filterTasks();
     renderRepairTable();
 
-    console.log("🔄 Applied cloud state");
-
-    /* 🔥 CHỈ GHI LẠI KHI CÓ THAY ĐỔI THẬT */
-    if (localChanged) {
-      window.__syncSource = "realtime";
-      await syncFromFirebase();
-      window.__syncSource = null;
-    }
+    console.log("✅ Silent sync done");
 
   } finally {
     window.__silentSyncing = false;
+
+    // ⏱️ nhả cờ sau 300ms (đủ cho snapshot nội bộ trôi qua)
     setTimeout(() => {
       window.__ignoreNextRealtime = false;
     }, 3000);
