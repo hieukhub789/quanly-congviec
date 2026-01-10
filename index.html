@@ -3327,6 +3327,11 @@ function showSystemNotification(title, message, type = "info") {
           }
           return task;
         });
+        // 🚫 CHẶN PUSH KHI LOCAL RỖNG
+        if (tasks.length === 0 && (!repairs || repairs.length === 0)) {
+          console.warn("⛔ Skip sync: local empty");
+          continue;
+        }
 
         // lưu lại local sau khi thêm id
         localStorage.setItem("tasks_" + username, JSON.stringify(tasks));
@@ -3354,14 +3359,17 @@ function showSystemNotification(title, message, type = "info") {
 
           const taskPayload = encodeTasks(tasks);
 
-const payload = {
-  username,
-  ...taskPayload,       // 🔥 tasks được shard
-  notes: finalNote,
-  lastSync: new Date().toISOString(),
-};
+          const payload = {
+            username,
+            ...taskPayload,       // 🔥 tasks được shard
+            notes: finalNote,
+            lastSync: new Date().toISOString(),
+          };
 
-
+          // repairs: chỉ ghi khi có
+          if (Array.isArray(repairs) && repairs.length > 0) {
+            Object.assign(payload, encodeRepairs(repairs));
+          }
           // Không ghi đè repairs nếu local rỗng
           if (Array.isArray(repairs) && repairs.length > 0) {
           const repairPayload = encodeRepairs(repairs);
