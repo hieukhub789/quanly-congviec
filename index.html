@@ -3366,10 +3366,7 @@ function showSystemNotification(title, message, type = "info") {
             lastSync: new Date().toISOString(),
           };
 
-          // repairs: chỉ ghi khi có
-          if (Array.isArray(repairs) && repairs.length > 0) {
-            Object.assign(payload, encodeRepairs(repairs));
-          }
+          
           // Không ghi đè repairs nếu local rỗng
           if (Array.isArray(repairs) && repairs.length > 0) {
           const repairPayload = encodeRepairs(repairs);
